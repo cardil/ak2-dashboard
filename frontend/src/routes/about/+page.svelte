@@ -47,8 +47,8 @@
         >
       </li>
       <li>
-        <a href="https://github.com/cardil/ACK2-Webserver"
-          >AK2 Custom webserver</a
+        <a href="https://github.com/cardil/ak2-dashboard"
+          >AK2 Dashboard</a
         >
       </li>
       <li>

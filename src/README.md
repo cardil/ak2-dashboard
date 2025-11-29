@@ -79,7 +79,7 @@ make clean
 make
 ```
 
-Both methods produce identical ARM binaries. The Docker method is used in CI/CD pipelines to avoid downloading from musl.cc.
+The Docker method is primarily used in CI/CD pipelines to avoid downloading from musl.cc, but produces untested binaries. **Use the default wget method for production builds.**
 
 ### Build Process
 

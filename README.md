@@ -39,8 +39,8 @@ This is an actively maintained fork of [AGG2017's ACK2-Webserver](https://github
 **Already Jailbroken?** Deploy directly via SSH:
 
 ```bash
-git clone https://github.com/cardil/ACK2-Webserver
-cd ACK2-Webserver
+git clone https://github.com/cardil/ak2-dashboard
+cd ak2-dashboard
 make deploy PRINTER_IP=192.168.1.100
 ```
 
@@ -115,7 +115,7 @@ This project is part of a suite of community tools for Kobra 2 printers:
 
 **Maintained Forks (by cardil):**
 - 🔧 [kobra2-fw-tools](https://github.com/cardil/kobra2-fw-tools) - Jailbreak tools and custom firmware builder (fork of deleted ultimateshadsform/Anycubic-Kobra-2-Series-Tools)
-- 🌐 [ACK2-Webserver](https://github.com/cardil/ACK2-Webserver) - This project (fork of AGG2017/ACK2-Webserver)
+- 🌐 [AK2 Dashboard](https://github.com/cardil/ak2-dashboard) - This project (fork of AGG2017/ACK2-Webserver)
 - 🚀 [Kobra Unleashed](https://github.com/cardil/kobra-unleashed) - MQTT server for cloud printing (fork of anjomro/kobra-unleashed)
 
 **Original Projects:**

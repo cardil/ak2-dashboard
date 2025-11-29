@@ -1,10 +1,9 @@
 # AK2 Dashboard - User Guide
 
-Comprehensive documentation for the AK2 Dashboard web interface.
+Comprehensive guide to using the AK2 Dashboard features.
 
 ## Table of Contents
 
-- [Getting Started](#getting-started)
 - [Dashboard Overview](#dashboard-overview)
 - [Bed Mesh Leveling](#bed-mesh-leveling)
 - [Profiles System](#profiles-system)
@@ -13,23 +12,7 @@ Comprehensive documentation for the AK2 Dashboard web interface.
 - [File Browser](#file-browser)
 - [Webcam](#webcam)
 - [Kobra Unleashed Integration](#kobra-unleashed-integration)
-- [Deployment](#deployment)
 - [Troubleshooting](#troubleshooting)
-
----
-
-## Getting Started
-
-The AK2 Dashboard is a web interface accessible through your browser when your printer is connected to your network. Simply navigate to your printer's IP address with the configured port (default: 8000).
-
-Example: `http://192.168.1.100:8000`
-
-### First Time Setup
-
-1. **Network Connection** - Ensure your printer is connected to your local network
-2. **Find IP Address** - Check your router or printer display for the IP
-3. **Access Dashboard** - Open the URL in your web browser
-4. **Configure Kobra Unleashed** (Optional) - Edit `/mnt/UDISK/webfs/api/webserver.json` to set your MQTT server URL
 
 ---
 
@@ -270,68 +253,71 @@ Real-time image streaming from a USB webcam.
 
 ## Kobra Unleashed Integration
 
-Kobra Unleashed provides MQTT-based cloud printing and monitoring.
+[Kobra Unleashed](https://github.com/cardil/kobra-unleashed) enables remote printer control through a web interface connected to your MQTT server.
 
-### Setup
+### What You Can Do
 
-1. **Install Kobra Unleashed** - On a Raspberry Pi or other server
-   - Guide: [https://github.com/cardil/kobra-unleashed](https://github.com/cardil/kobra-unleashed)
+Once configured:
+- 📤 **Remote Printing** - Upload and start prints from anywhere
+- 📊 **Live Monitoring** - Real-time status and statistics
+- 📁 **File Management** - Browse and manage G-code files
+- 🖨️ **Multi-printer** - Control multiple Kobra 2 printers
+- 📋 **Print Queue** - Manage print jobs
 
-2. **Configure Dashboard** - Edit `/mnt/UDISK/webfs/api/webserver.json`:
+### Installation Required
+
+> **⚠️ Kobra Unleashed requires separate installation:**
+>
+> You need to set up:
+> 1. MQTT server (e.g., Mosquitto)
+> 2. Kobra Unleashed server
+> 3. Configure printer firmware
+> 4. Configure this dashboard
+>
+> **[📖 Complete Setup Guide](https://github.com/cardil/ak2-dashboard/blob/main/INSTALL.md#kobra-unleashed-integration)**
+
+### Quick Configuration Check
+
+To verify your configuration:
+
+1. **Check if KU URL is set** - SSH into printer:
+   ```bash
+   ssh root@PRINTER_IP
+   cat /mnt/UDISK/webfs/api/webserver.json
+   ```
+
+2. **Look for `mqtt_webui_url`:**
    ```json
    {
-     "printer_model": "K2Pro",
-     "update_version": "3.1.0",
-     "mqtt_webui_url": "http://YOUR_SERVER_IP:5000"
+     "mqtt_webui_url": "http://YOUR_KU_SERVER_IP:5000"
    }
    ```
-   Replace `YOUR_SERVER_IP` with your Kobra Unleashed server address.
 
-3. **Access** - The "Kobra Unleashed" link in the navigation will open your server
-
-### Features (via Kobra Unleashed)
-- Remote printing from anywhere
-- Cloud file upload
-- Print queue management
-- Status notifications
-- Multi-printer management
-
----
-
-## Deployment
-
-### Installation via Custom Firmware
-
-The AK2 Dashboard is deployed as part of a custom firmware update.
-
-1. **Get Custom Firmware Tools** - [https://github.com/cardil/kobra2-fw-tools](https://github.com/cardil/kobra2-fw-tools)
-
-2. **Enable Webserver Option** - In `options.cfg`:
+3. **Test KU server** - Visit in browser:
    ```
-   webserver="webfs-v5:8000"
+   http://YOUR_KU_SERVER_IP:5000
    ```
-   (Adjust version and port as needed)
 
-3. **Build Custom Firmware** - Follow the custom firmware build instructions
+4. **Reload this dashboard** after any config changes
 
-4. **Flash to Printer** - Install the custom firmware update
+### Common Issues
 
-5. **Access Dashboard** - Navigate to `http://PRINTER_IP:8000`
+**"Kobra Unleashed: unavailable"**
+- ✅ [Check full setup guide](https://github.com/cardil/ak2-dashboard/blob/main/INSTALL.md#kobra-unleashed-integration)
+- ✅ Verify KU server is running
+- ✅ Check `mqtt_webui_url` in webserver.json
+- ✅ Reload this page
 
-### File Locations
+**Printer controls not working**
+- ✅ Verify MQTT server is running
+- ✅ Check printer firmware MQTT settings
+- ✅ Review KU server logs
 
-- **Executable** - `/opt/bin/webfsd`
-- **Web Root** - `/mnt/UDISK/webfs` (runtime), `/opt/webfs` (templates)
-- **Config** - `/mnt/UDISK/webfs/api/webserver.json`
-- **Logs** - Accessible via System Tools
+### Resources
 
-### Custom Pages
-
-You can add additional static pages after installation:
-- Add files to `/mnt/UDISK/webfs`
-- Use HTML, CSS, and JavaScript only
-- No server-side scripting (PHP, etc.)
-- Backend processing must be done in C (see `src/request.c`)
+- 📖 [Installation Guide](https://github.com/cardil/ak2-dashboard/blob/main/INSTALL.md#kobra-unleashed-integration)
+- 🔧 [Kobra Unleashed](https://github.com/cardil/kobra-unleashed)
+- 🐛 [Report Issues](https://github.com/cardil/ak2-dashboard/issues)
 
 ---
 
@@ -345,9 +331,9 @@ You can add additional static pages after installation:
 - Check firewall settings
 
 **Check Port**
-- Default port is 8000
+- Default port is 80
 - Verify port in custom firmware config
-- Try `http://PRINTER_IP:8000`
+- Try `http://PRINTER_IP` or `http://PRINTER_IP:80`
 
 **Restart Webserver**
 - SSH into printer
@@ -440,4 +426,4 @@ A: This project is specifically for Kobra 2 Series. Kobra 3 uses different firmw
 
 ---
 
-For more information, visit the [GitHub repository](https://github.com/cardil/ACK2-Webserver) or join the [Telegram community](https://t.me/kobra2modding).
+For more information, visit the [GitHub repository](https://github.com/cardil/ak2-dashboard) or join the [Telegram community](https://t.me/kobra2modding).

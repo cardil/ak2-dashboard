@@ -49,12 +49,45 @@ The AK2 Dashboard addresses these limitations, offering features unavailable in 
 
 ## Project History
 
-This project evolved from a simple static HTML webserver into a comprehensive, modern web application:
+### The Beginning: Community-Driven Innovation
 
-- **Origins** - Born from the Kobra 2 modding community's desire for better printer control
-- **Evolution** - Transitioned from static HTML to a reactive Svelte application
-- **Community-driven** - Built with contributions and feedback from users worldwide
-- **Open source** - All code freely available for learning and improvement
+The Anycubic Kobra 2 series launched with proprietary firmware that frustrated users with its limitations. The modding community, centered around the [Telegram group](https://t.me/kobra2modding), began exploring ways to unlock the printer's potential.
+
+Early efforts focused on gaining root access through UART connections and understanding the printer's ARM-based Linux system. These initial explorations laid the groundwork for what would become a comprehensive ecosystem of tools and enhancements.
+
+### First Generation: Static HTML Interface
+
+The original ACK2-Webserver by [@AGG2017](https://github.com/AGG2017) provided a lightweight web interface using static HTML files served by a modified WEBFS server. While functional, the static nature limited interactivity and made adding features challenging.
+
+Key capabilities included:
+- Basic bed mesh leveling visualization
+- Simple file management
+- Webcam streaming
+- Minimal system information display
+
+### Parallel Development: Kobra Unleashed
+
+Around the same time, [@anjomro](https://github.com/anjomro) created Kobra Unleashed, an MQTT-based server that enabled cloud connectivity and remote printer control. This complementary project opened new possibilities for printer management but required separate installation and configuration.
+
+### The Transformation: Modern Web Application
+
+Recognizing the need for a more capable and maintainable solution, the project underwent a complete frontend overhaul. The static HTML pages were replaced with a modern Svelte application, bringing:
+
+- **Reactive UI** - Real-time updates without page refreshes
+- **Component Architecture** - Modular, reusable interface elements
+- **Advanced Features** - Sophisticated bed mesh averaging, syntax-highlighted file viewer, comprehensive system tools
+- **Developer Experience** - Mock server for development, TypeScript for type safety, comprehensive testing
+
+### Current State: Integrated Ecosystem
+
+Today's AK2 Dashboard represents the convergence of multiple community efforts:
+
+- **Custom Firmware Tools** - Building on ultimateshadsform's original jailbreak tools (now maintained as [kobra2-fw-tools](https://github.com/cardil/kobra2-fw-tools))
+- **Enhanced Kobra Unleashed** - Maintained fork with improvements and active development
+- **Modernized Dashboard** - Complete UI rebuild with focus on usability and features
+- **Active Community** - Ongoing development, bug fixes, and feature additions driven by user feedback
+
+The project continues to evolve, with the community constantly discovering new capabilities and refining existing features. What started as basic printer control has grown into a comprehensive platform that demonstrates what's possible when users take control of their own devices.
 
 ## Community & Credits
 
@@ -63,7 +96,7 @@ This project evolved from a simple static HTML webserver into a comprehensive, m
 
 ### Key Projects
 - **[AK2 Custom Firmware & Tools](https://github.com/cardil/kobra2-fw-tools)** - Custom firmware tools for Kobra 2 Series
-- **[AK2 Dashboard](https://github.com/cardil/ACK2-Webserver)** - This webserver project
+- **[AK2 Dashboard](https://github.com/cardil/ak2-dashboard)** - This webserver project
 - **[Kobra Unleashed](https://github.com/anjomro/kobra-unleashed)** - Original MQTT server project
 - **[Kobra Unleashed (Updated)](https://github.com/cardil/kobra-unleashed)** - Maintained fork with enhancements
 
@@ -74,7 +107,21 @@ This project evolved from a simple static HTML webserver into a comprehensive, m
 - **[ECharts](https://echarts.apache.org/)** - 3D mesh visualization
 
 ### Contributors
-This project represents countless hours of development, testing, and refinement by community members passionate about improving their 3D printing experience. Special thanks to all who have contributed code, reported bugs, tested features, and provided feedback.
+
+**Original Authors:**
+- **[@AGG2017](https://github.com/AGG2017)** - Original ACK2-Webserver author
+- **[@anjomro](https://github.com/anjomro)** - Original Kobra Unleashed author
+- **ultimateshadsform** - Original firmware tools author (repository deleted)
+- **[@1coderookie](https://github.com/1coderookie)** - Comprehensive Kobra 2 Pro documentation
+
+**Current Maintainer:**
+- **[@cardil](https://github.com/cardil)** - Maintains forks of AK2 Dashboard, Kobra Unleashed, and kobra2-fw-tools
+
+**Technology Credits:**
+- [WEBFS](https://linux.bytesex.org/misc/webfs.html) by Gerd Hoffmann
+- [MUSL](https://musl.libc.org) by Rich Felker and contributors
+
+This project represents countless hours of development, testing, and refinement by community members passionate about improving their 3D printing experience. Thanks to all who have contributed code, reported bugs, tested features, and provided feedback.
 
 ## Technical Overview
 

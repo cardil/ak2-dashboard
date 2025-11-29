@@ -38,7 +38,7 @@
       <h3>{message.title}</h3>
       <p>{message.body}</p>
       <a
-        href="https://github.com/cardil/ACK2-Webserver/blob/master/webserver/deprecated/documentation/index.html"
+        href="https://github.com/cardil/ak2-dashboard/blob/main/INSTALL.md#kobra-unleashed-integration"
         target="_blank"
         rel="noopener noreferrer"
       >

@@ -4,13 +4,10 @@ Complete installation instructions for the AK2 Dashboard.
 
 ## Prerequisites
 
-**⚠️ Jailbroken Printer Required**
-
-This dashboard requires a jailbroken Kobra 2 Series printer (Pro, Plus, or Max) with SSH access.
-
-**⚠️ No Firmware Downloads Here**
-
-This project does NOT host or distribute firmware files. All firmware comes from Anycubic's official sources, downloaded legally via the [kobra2-fw-tools](https://github.com/cardil/kobra2-fw-tools) scripts.
+> [!WARNING]
+> **Jailbroken Printer Required**
+>
+> This dashboard requires a jailbroken Kobra 2 Series printer (Pro, Plus, or Max) with SSH access.
 
 ---
 
@@ -23,6 +20,7 @@ Choose your path based on your printer's current state:
 If your printer already has:
 - Custom firmware with SSH enabled
 - Root access configured
+- SWUpdate certificates replaced
 
 **Quick Deployment:**
 
@@ -30,8 +28,8 @@ If you have `unzip` and `openssh-sftp-server` installed on your printer:
 
 ```bash
 # Clone this repository
-git clone https://github.com/cardil/ACK2-Webserver
-cd ACK2-Webserver
+git clone https://github.com/cardil/ak2-dashboard
+cd ak2-dashboard
 
 # Interactive deployment (recommended - prompts for configuration)
 make deploy
@@ -51,7 +49,7 @@ You can still override any parameter via command line:
 
 ```bash
 # All parameters
-make deploy PRINTER_IP=192.168.1.100 PRINTER_USER=root PRINTER_PORT=22 WEBFSD_PORT=8000
+make deploy PRINTER_IP=192.168.1.100 PRINTER_USER=root PRINTER_PORT=22 WEBFSD_PORT=80
 
 # Or override specific values
 make deploy PRINTER_IP=192.168.1.50 WEBFSD_PORT=8080
@@ -73,124 +71,47 @@ opkg install unzip openssh-sftp-server
 
 ### Path B: New Installation 🔧
 
-Complete setup from scratch, including jailbreak.
+Complete jailbreak and custom firmware installation from scratch.
 
-#### Step 1: Jailbreak Your Printer
+> [!NOTE]
+> **AK2 Dashboard Included by Default**
+>
+> The [kobra2-fw-tools](https://github.com/cardil/kobra2-fw-tools) project provides complete jailbreak and custom firmware building tools. The AK2 Dashboard is included by default in custom firmware built with these tools.
 
-**Required:**
-- USB-to-UART adapter (3.3V)
-- Access to printer mainboard
-- USB drive (FAT32, any size)
+**Basic Procedure:**
 
-**Process:**
+1. 🔌 **U-Boot Access via UART** - Connect USB-to-UART adapter to gain boot-level access
+2. 💾 **Backup eMMC** - Create a complete backup before making changes
+3. 🔑 **Gain ROOT Access** - Set root password and enable root login
+4. 🌐 **Install SSH** - Enable remote access to the printer
+5. 🔐 **Replace SWUpdate Certificates** - Allow custom firmware updates
+6. ⚙️ **Build and Flash Custom Firmware** - Create and install your custom firmware
 
-1. **Connect UART Console**
-   - Follow: [UART Guide](https://github.com/cardil/kobra2-fw-tools/blob/main/docs/UART.md)
-   - Downgrade to firmware 2.3.9 first (if needed)
-   - Connect UART adapter to mainboard header
-   - DO NOT connect +5V pin
+**Complete Documentation:**
 
-2. **Gain Root Access**
-   - Follow: [ROOT Guide](https://github.com/cardil/kobra2-fw-tools/blob/main/docs/ROOT.md)
-   - Intercept boot by pressing `s` key
-   - Set root password via u-boot
-   - Install SSH access
+Follow the comprehensive guides in [kobra2-fw-tools](https://github.com/cardil/kobra2-fw-tools):
+- [UART Setup Guide](https://github.com/cardil/kobra2-fw-tools/blob/main/docs/UART.md)
+- [ROOT Access Guide](https://github.com/cardil/kobra2-fw-tools/blob/main/docs/ROOT.md)
+- [eMMC Backup Guide](https://github.com/cardil/kobra2-fw-tools/blob/main/docs/EMMC_BACKUP.md)
+- [Complete Options Reference](https://github.com/cardil/kobra2-fw-tools/blob/main/docs/OPTIONS.md)
 
-**Complete Documentation:** [kobra2-fw-tools](https://github.com/cardil/kobra2-fw-tools)
+**After Flashing:**
 
-#### Step 2: Build Custom Firmware
+Once the custom firmware is installed and the printer reboots:
 
-Clone the firmware tools repository:
+1. Find your printer's IP address (check router's DHCP leases or printer's network settings)
+2. Open your browser to `http://PRINTER_IP` (default port :80)
+3. The AK2 Dashboard is already installed and ready to use!
 
-```bash
-git clone https://github.com/cardil/kobra2-fw-tools
-cd kobra2-fw-tools
-```
+> [!TIP]
+> The webserver is enabled by default on port 80 in kobra2-fw-tools custom firmware. No additional installation steps are needed.
 
-Download Anycubic's official firmware (replace with your model and version):
-
-```bash
-# For Kobra 2 Pro:
-./fwdl.sh K2Pro 3.0.9
-
-# For Kobra 2 Plus:
-./fwdl.sh K2Plus 3.0.9
-
-# For Kobra 2 Max:
-./fwdl.sh K2Max 3.0.9
-```
-
-Unpack the firmware:
-
-```bash
-./unpack.sh FW/update_3.0.9.swu
-```
-
-#### Step 3: Configure Options
-
-Edit `options.cfg` to enable the webserver and other features:
-
-```ini
-# Enable the webserver
-webserver="webfs-v5:8000"
-
-# Enable SSH access
-ssh="yes"
-
-# Enable root access
-root_access="yes"
-root_password="your_secure_password"
-
-# Optional: Enable Kobra Unleashed MQTT redirect
-# modify_mqtt="yes"
-# mqtt_url="your-mqtt-server-ip"
-```
-
-**Available Options:** See [OPTIONS.md](https://github.com/cardil/kobra2-fw-tools/blob/main/docs/OPTIONS.md) for all configuration options.
-
-#### Step 4: Build the Firmware
-
-Run the build script:
-
-```bash
-./build.sh
-```
-
-This will:
-1. Download and build the webserver from source
-2. Patch the firmware with your options
-3. Create `update/update.swu`
-
-#### Step 5: Flash the Firmware
-
-**Via USB (Recommended for first flash):**
-
-1. Format a USB drive as FAT32
-2. Create a folder named `update` on the USB drive
-3. Copy `update/update.swu` into the `update` folder
-4. Insert USB drive into printer
-5. Navigate to Update menu on printer screen
-6. Select USB update
-7. Printer will reboot when complete
-
-**Via SSH (If already jailbroken):**
-
-The build script will offer to upload via SSH automatically.
-
-#### Step 6: Access the Dashboard
-
-Once the printer reboots:
-
-1. Find your printer's IP address
-   - Check your router's DHCP leases
-   - Or check printer's network settings
-
-2. Open in your browser:
-   ```
-   http://YOUR_PRINTER_IP:8000
-   ```
-
-3. You should see the AK2 Dashboard!
+> [!IMPORTANT]
+> **Firmware Security Best Practices**
+>
+> - 🔒 **Change default password** - Don't use `toor` in production
+> - 💾 **Backup important files** - Always backup `/user` directory before modifications
+> - 📦 **Keep firmware accessible** - Save your working custom firmware files
 
 ---
 
@@ -215,7 +136,7 @@ git pull
 
 ```bash
 # Build and deploy in one step
-cd ACK2-Webserver
+cd ak2-dashboard
 make deploy
 
 # The deploy command will prompt for configuration if not already set
@@ -225,7 +146,7 @@ make deploy
 
 ```bash
 # Build the webserver package
-cd ACK2-Webserver
+cd ak2-dashboard
 make
 
 # Copy to printer
@@ -242,7 +163,7 @@ cp -r mnt/* /mnt/
 
 # Restart webserver
 killall webfsd
-/opt/bin/webfsd -p 8000 -r /mnt/UDISK/webfs
+/opt/bin/webfsd -p 80 -r /mnt/UDISK/webfs
 ```
 
 ---
@@ -266,7 +187,7 @@ ps | grep webfsd
 ```bash
 ssh root@PRINTER_IP
 killall webfsd
-/opt/bin/webfsd -p 8000 -r /mnt/UDISK/webfs
+/opt/bin/webfsd -p 80 -r /mnt/UDISK/webfs
 ```
 
 ### Can't Access via SSH
@@ -285,7 +206,10 @@ killall webfsd
 
 ### Lost Root Access After Update
 
-If you flash stock Anycubic firmware, you'll lose root access. To regain:
+> [!CAUTION]
+> If you flash stock Anycubic firmware, you'll lose root access.
+
+To regain access:
 - Restore from [eMMC backup](https://github.com/cardil/kobra2-fw-tools/blob/main/docs/EMMC_RESTORE.md), or
 - Repeat the jailbreak process
 
@@ -296,7 +220,7 @@ If you flash stock Anycubic firmware, you'll lose root access. To regain:
 **Community Support:**
 - 💬 [Telegram Group](https://t.me/kobra2modding)
 - 📖 [Klipper Discourse Thread](https://klipper.discourse.group/t/printer-cfg-for-anycubic-kobra-2-plus-pro-max/11658) (archived)
-- 🐛 [GitHub Issues](https://github.com/cardil/ACK2-Webserver/issues)
+- 🐛 [GitHub Issues](https://github.com/cardil/ak2-dashboard/issues)
 
 **Documentation:**
 - [kobra2-fw-tools](https://github.com/cardil/kobra2-fw-tools) - Jailbreak and firmware tools
@@ -307,17 +231,170 @@ If you flash stock Anycubic firmware, you'll lose root access. To regain:
 
 ---
 
+## Kobra Unleashed Integration
+
+[Kobra Unleashed](https://github.com/cardil/kobra-unleashed) enables remote printer control through a web interface and API connected to your MQTT server.
+
+### Architecture
+
+```
+      Printer    ──MQTT──>   MQTT Server  <──MQTT──  Kobra Unleashed
+(custom firmware)            (Mosquitto)                (Web API)
+                                                            ↑
+                                                            │
+                                                      AK2 Dashboard
+                                                        (Browser)
+```
+
+### Prerequisites
+
+- **MQTT Server** - Self-hosted message broker (e.g., Mosquitto)
+- **Server Hardware** - Raspberry Pi, homelab server, or always-on computer
+- **Network Access** - Printer and KU server on same network
+
+### Setup Steps
+
+#### 1. Install MQTT Server (Mosquitto)
+
+On your server (Raspberry Pi, homelab, etc.):
+
+```bash
+# Debian/Ubuntu/Raspberry Pi OS
+sudo apt update
+sudo apt install mosquitto mosquitto-clients
+
+# Start and enable service
+sudo systemctl start mosquitto
+sudo systemctl enable mosquitto
+```
+
+Configure Mosquitto (optional authentication):
+```bash
+sudo vi /etc/mosquitto/mosquitto.conf
+```
+
+#### 2. Configure Printer Firmware for MQTT
+
+In your custom firmware `options.cfg`:
+```bash
+mqtt_server="YOUR_MQTT_SERVER_IP"
+mqtt_port="1883"
+```
+
+Build and flash the custom firmware with these settings.
+
+#### 3. Install Kobra Unleashed
+
+On your server:
+
+```bash
+# Clone repository
+git clone https://github.com/cardil/kobra-unleashed
+cd kobra-unleashed
+
+# Install dependencies
+pip3 install -r requirements.txt
+
+# Configure
+cp config.example.json config.json
+vi config.json
+```
+
+Set your MQTT server:
+```json
+{
+  "mqtt_broker": "YOUR_MQTT_SERVER_IP",
+  "mqtt_port": 1883,
+  "web_port": 5000
+}
+```
+
+Start Kobra Unleashed:
+```bash
+python3 main.py
+```
+
+#### 4. Configure AK2 Dashboard
+
+SSH into your printer:
+```bash
+ssh root@PRINTER_IP
+vi /mnt/UDISK/webfs/api/webserver.json
+```
+
+Add Kobra Unleashed URL:
+```json
+{
+  "printer_model": "K2Pro",
+  "update_version": "3.1.0",
+  "mqtt_webui_url": "http://YOUR_KU_SERVER_IP:5000"
+}
+```
+
+#### 5. Verify
+
+1. Access KU directly: `http://YOUR_KU_SERVER_IP:5000`
+2. Access AK2 Dashboard: `http://PRINTER_IP`
+3. Check "Kobra Unleashed" link in dashboard navigation
+4. Verify printer controls work
+
+### Troubleshooting
+
+**Printer not connecting to MQTT**
+- Check MQTT server is running: `systemctl status mosquitto`
+- Verify network connectivity
+- Check printer firmware MQTT settings
+- View MQTT logs: `sudo journalctl -u mosquitto -f`
+
+**KU cannot connect to MQTT**
+- Verify `mqtt_broker` in KU config.json
+- Check MQTT server logs for connection attempts
+- Test MQTT connection: `mosquitto_sub -h YOUR_MQTT_SERVER_IP -t '#'`
+
+**Dashboard cannot connect to KU**
+- Verify `mqtt_webui_url` in webserver.json
+- Check KU is running: `http://YOUR_KU_SERVER_IP:5000`
+- Verify firewall allows port 5000
+
+---
+
 ## Security Notes
 
-- **Change default password** - Don't use `toor` in production
-- **Network security** - Dashboard has no authentication; use on trusted networks only
-- **Backup important files** - Always backup `/user` directory before modifications
-- **Keep firmware accessible** - Save your working custom firmware files
+> [!IMPORTANT]
+> **AK2 Dashboard Security**
+>
+> **Default (No Authentication):**
+> - Suitable for trusted home networks
+> - All features accessible without password
+>
+> **HTTP Basic Authentication (Enterprise/Campus):**
+> - Add `-b user:pass` flag to webfsd startup
+> - Example: `/opt/bin/webfsd -p 80 -b admin:securepass -r /mnt/UDISK/webfs`
+> - Protects ALL content: static files, API endpoints, and dashboard features
+> - Authentication check happens before ANY request processing
+>
+> **Kobra Unleashed API:**
+> - ⚠️ **NO authentication mechanism available**
+> - Wide open by default (CORS: `*`)
+> - Anyone on network can upload files and control printer
+> - **Recommendation:** Use firewall rules to restrict access
+
+**Network Security Best Practices:**
+- Run on isolated/trusted networks only (default)
+- Use firewall rules to limit access by IP
+- Consider VPN for remote access
+- For basic auth, use strong passwords
 
 ---
 
 ## Legal Notice
 
-This project is not affiliated with or endorsed by Anycubic. Use at your own risk. Modifying firmware may void your warranty.
+> [!WARNING]
+> **Disclaimer**
+>
+> This project is not affiliated with or endorsed by Anycubic. Use at your own risk. Modifying firmware may void your warranty.
 
-The custom firmware process uses Anycubic's official firmware files, downloaded from their public servers. No proprietary firmware is distributed by this project.
+> [!NOTE]
+> **Firmware Distribution**
+>
+> This project does NOT host or distribute firmware files. All firmware comes from Anycubic's official sources, downloaded legally via the [kobra2-fw-tools](https://github.com/cardil/kobra2-fw-tools) scripts. The custom firmware process uses Anycubic's official firmware files, downloaded from their public servers. No proprietary firmware is distributed by this project.
