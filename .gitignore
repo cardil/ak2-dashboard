@@ -12,6 +12,9 @@ originals/
 !/webserver/opt/webfs/api
 !/webserver/opt/webfs/files
 !/webserver/opt/webfs/deprecated
-.continue/
 src/.stamps/
+.continue
+.ai
+.claude
 AGENTS.md
+CLAUDE.md
