@@ -25,7 +25,7 @@ describe("Vite Dev Server Smoke Test", () => {
   })
 
   describe("should start and respond to requests without errors", () => {
-    const pathsToTest = ["/", "/leveling", "/system-tools", "/about"]
+    const pathsToTest = ["/", "/leveling", "/system-tools", "/docs"]
 
     for (const path of pathsToTest) {
       it(`should fetch ${path} successfully`, async () => {

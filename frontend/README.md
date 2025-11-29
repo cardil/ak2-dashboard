@@ -111,11 +111,11 @@ Example component structure:
 
 ```svelte
 <script lang="ts">
-  import { someStore } from '$lib/stores/someStore'
-  
+  import { someStore } from "$lib/stores/someStore"
+
   export let prop1: string
   export let prop2: number = 0
-  
+
   function handleAction() {
     // Handle user interaction
   }
@@ -150,8 +150,8 @@ The application uses Svelte stores for reactive state management:
 ### Using Stores
 
 ```typescript
-import { printerStore } from '$lib/stores/printer'
-import { get } from 'svelte/store'
+import { printerStore } from "$lib/stores/printer"
+import { get } from "svelte/store"
 
 // Subscribe to changes (reactive)
 $: printers = $printerStore
@@ -227,15 +227,15 @@ npm run test:watch
 Example component test:
 
 ```typescript
-import { render } from '@testing-library/svelte'
-import { expect, test } from 'vitest'
-import MyComponent from '$lib/components/MyComponent.svelte'
+import { render } from "@testing-library/svelte"
+import { expect, test } from "vitest"
+import MyComponent from "$lib/components/MyComponent.svelte"
 
-test('renders correctly', () => {
+test("renders correctly", () => {
   const { getByText } = render(MyComponent, {
-    props: { title: 'Test Title' }
+    props: { title: "Test Title" },
   })
-  expect(getByText('Test Title')).toBeTruthy()
+  expect(getByText("Test Title")).toBeTruthy()
 })
 ```
 
@@ -244,15 +244,17 @@ test('renders correctly', () => {
 ### Adding a New Page
 
 1. **Create Route:**
+
    ```bash
    mkdir src/routes/newpage
    touch src/routes/newpage/+page.svelte
    ```
 
 2. **Implement Page Component:**
+
    ```svelte
    <script lang="ts">
-     import Card from '$lib/components/Card.svelte'
+     import Card from "$lib/components/Card.svelte"
    </script>
 
    <div class="page">

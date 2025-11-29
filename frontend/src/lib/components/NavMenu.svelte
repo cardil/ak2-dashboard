@@ -39,8 +39,7 @@
       >
     </li>
     <li>
-      <a href="/about"><Fa icon={faInfoCircle} size="1x" /><span>About</span></a
-      >
+      <a href="/docs"><Fa icon={faInfoCircle} size="1x" /><span>Docs</span></a>
     </li>
     <li class="theme-switcher-item">
       <ThemeSwitcher {isOpen} />

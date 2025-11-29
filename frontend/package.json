@@ -29,6 +29,7 @@
     "@types/prismjs": "^1.26.5",
     "@types/socket.io-client": "^1.4.36",
     "jsdom": "^27.2.0",
+    "marked": "^17.0.1",
     "node-fetch": "^3.3.2",
     "patch-package": "^8.0.1",
     "prettier": "^3.4.2",

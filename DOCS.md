@@ -24,7 +24,6 @@ The main dashboard provides a comprehensive view of your printer's status and co
 - **Temperature** - Current and target temperatures for hotend and bed
 - **Print Progress** - Real-time progress percentage and time estimates
 - **Status** - Current printer state (idle, printing, paused, etc.)
-- **Position** - Current X, Y, Z coordinates
 
 ### Printer Controls
 - **Upload & Print** - Upload G-code files directly from your computer
@@ -33,7 +32,7 @@ The main dashboard provides a comprehensive view of your printer's status and co
 - **File Selection** - Browse and select files from printer storage
 
 ### Print History
-View your printing history with timestamps and filenames.
+View recently printed files with timestamps and reprint capability.
 
 ### Webcam Stream
 Live view from your USB camera (if connected).
@@ -112,33 +111,12 @@ Each corresponding point from all saved slots is summed and divided by the numbe
 
 ## Profiles System
 
-Profiles allow you to save complete leveling configurations for different scenarios.
+🚧 **This feature is currently under reconstruction.** A new profiles system with isolated slot storage is being developed.
 
-### Use Cases
-
-**Different Build Plates**
-- Plate 1: Standard PEI sheet
-- Plate 2: Textured spring steel
-- Plate 3: Glass plate
-
-Each plate has different thickness and magnetic properties, requiring unique mesh data.
-
-**Different Materials**
-- PLA Profile: 60°C bed temperature
-- PETG Profile: 80°C bed temperature
-- ABS Profile: 100°C bed temperature
-
-Thermal expansion varies with temperature, so mesh data taken at one temperature won't be optimal at another.
-
-### How to Use
-
-1. **Create Configuration** - Set up your leveling (grid size, temperature, etc.)
-2. **Generate Averaged Mesh** - Use the slot system to create a reliable mesh
-3. **Save Profile** - Store the complete configuration
-4. **Switch Profiles** - Load different profiles as needed
-5. **Apply** - Set active profile and reboot printer
-
-**Note:** Profile naming is not yet supported. Keep notes of which profile number corresponds to which configuration.
+The profiles system will allow you to save complete leveling configurations for different scenarios, such as:
+- Different build plates (PEI sheet, textured spring steel, glass plate)
+- Different materials with varying thermal expansion requirements
+- Custom configurations for specific use cases
 
 ---
 
@@ -167,7 +145,6 @@ Powered by ECharts, the visualizer provides stunning 3D representations of your 
 - **Uptime** - How long the printer has been running
 - **CPU Usage** - Current processor load
 - **Memory** - RAM usage statistics
-- **Temperature** - System temperature monitoring
 - **Reboot** - Restart the printer without physical access
 - **Shutdown** - Power down the system gracefully
 
@@ -189,8 +166,7 @@ Advanced log viewing with powerful features:
 - **Error Highlighting** - Errors in red, warnings in yellow
 - **Deduplication** - Repeated messages are collapsed
 - **Efficient Streaming** - HTTP Range requests for minimal bandwidth
-- **Search** - Find specific log entries
-- **Download** - Save logs for later analysis
+- **Download** - Log files can be downloaded via the File Browser
 
 **What Logs Show**
 - Klipper messages
@@ -243,11 +219,11 @@ Real-time image streaming from a USB webcam.
 - Resolution: 640×480
 
 ### Features
-- **Live Streaming** - Updated every second
+- **Live Streaming** - Updated approximately 8 times per second (125ms interval)
 - **Auto-refresh** - No manual refresh needed
 - **Embedded Display** - View directly in dashboard
 
-**Note:** Streaming is live images, not video. Images refresh every second for minimal resource usage.
+**Note:** Streaming is live images, not video. Images refresh approximately 8 times per second for minimal resource usage.
 
 ---
 
@@ -404,24 +380,31 @@ To verify your configuration:
 ## FAQ
 
 **Q: Will this void my warranty?**
+
 A: Installing custom firmware modifications may void manufacturer warranty. Use at your own risk.
 
 **Q: Can I revert to stock firmware?**
+
 A: Yes, you can flash stock firmware back to your printer.
 
 **Q: Is this safe?**
+
 A: The software is used by many community members, but as with any firmware modification, there are inherent risks. Always have a backup plan.
 
 **Q: How often should I update?**
+
 A: Check GitHub releases for updates and security patches. Update when new features or fixes are available.
 
 **Q: Can I contribute?**
+
 A: Absolutely! The project is open source and welcomes contributions. See the GitHub repository.
 
 **Q: Does this work with all Kobra 2 models?**
+
 A: Yes, it supports K2, K2 Pro, K2 Plus, and K2 Max.
 
 **Q: What about Kobra 3?**
+
 A: This project is specifically for Kobra 2 Series. Kobra 3 uses different firmware.
 
 ---
