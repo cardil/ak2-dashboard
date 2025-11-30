@@ -198,7 +198,9 @@ function createLevelingStore() {
       }
       const response = await api.updateSettings(selectedProfile, apiSettings)
 
-      if (response.grid_size_changed) {
+      // Only set rebootNeeded for "current" profile (the one actually on the printer)
+      // Saved profiles can be edited without affecting the printer state
+      if (response.grid_size_changed && selectedProfile === "current") {
         update((s) => ({ ...s, rebootNeeded: true }))
       }
 

@@ -148,7 +148,12 @@
   async function handleSaveSettings() {
     if (!$levelingStore.settings) return
 
-    if (localSettings.gridSize !== $levelingStore.settings.gridSize) {
+    // Only show grid size change warning for "current" profile (the one on the printer)
+    // Saved profiles can be edited without requiring a reboot
+    if (
+      $profilesStore.selectedProfile === "current" &&
+      localSettings.gridSize !== $levelingStore.settings.gridSize
+    ) {
       modalInfo = {
         title: "Confirm Grid Size Change",
         message: [
@@ -174,7 +179,11 @@
     try {
       const response = await levelingStore.saveSettings(localSettings)
       modalState = "closed"
-      if (response.grid_size_changed) {
+      // Only show reboot required dialog for "current" profile
+      if (
+        response.grid_size_changed &&
+        $profilesStore.selectedProfile === "current"
+      ) {
         modalInfo = {
           title: "Reboot Required",
           message:
