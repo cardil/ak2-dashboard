@@ -1,19 +1,25 @@
 <script lang="ts">
   import { profilesStore } from "$lib/stores/profiles"
-  import { createEventDispatcher } from "svelte"
 
-  export let isOpen = false
+  interface Props {
+    isOpen?: boolean
+    onclose?: () => void
+    onsave?: (detail: {
+      target: "new" | "current" | number
+      name?: string
+    }) => void
+  }
 
-  const dispatch = createEventDispatcher()
+  let { isOpen = false, onclose, onsave }: Props = $props()
 
-  let selectedTarget: "new" | "current" | number = "new"
-  let newProfileName = ""
+  let selectedTarget: "new" | "current" | number = $state("new")
+  let newProfileName = $state("")
 
-  $: sourceIsProfile = $profilesStore.selectedProfile !== "current"
-  $: showCurrentOption = sourceIsProfile
+  const sourceIsProfile = $derived($profilesStore.selectedProfile !== "current")
+  const showCurrentOption = $derived(sourceIsProfile)
 
   function handleClose() {
-    dispatch("close")
+    onclose?.()
     resetForm()
   }
 
@@ -32,7 +38,7 @@
       }
     }
 
-    dispatch("save", {
+    onsave?.({
       target: selectedTarget,
       name: selectedTarget === "new" ? newProfileName.trim() : undefined,
     })
@@ -44,23 +50,54 @@
     newProfileName = ""
   }
 
-  $: if (isOpen) {
-    // Reset form when modal opens
-    resetForm()
+  $effect(() => {
+    if (isOpen) {
+      // Reset form when modal opens
+      resetForm()
+    }
+  })
+
+  function handleBackdropKeydown(event: KeyboardEvent) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault()
+      handleClose()
+    }
   }
 
-  $: sourceProfileName =
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      handleClose()
+    }
+  }
+
+  const sourceProfileName = $derived(
     typeof $profilesStore.selectedProfile === "number"
       ? $profilesStore.profiles.find(
           (p) => p.id === $profilesStore.selectedProfile,
         )?.name || `Profile ${$profilesStore.selectedProfile}`
-      : "Current"
+      : "Current",
+  )
 </script>
 
 {#if isOpen}
-  <div class="modal-overlay" on:click={handleClose}>
-    <div class="modal-content" on:click|stopPropagation>
-      <h2>
+  <div
+    class="modal-overlay"
+    onclick={handleClose}
+    onkeydown={handleBackdropKeydown}
+    role="button"
+    tabindex="0"
+    aria-label="Close modal"
+  >
+    <div
+      class="modal-content"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={handleKeydown}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      tabindex="-1"
+    >
+      <h2 id="modal-title">
         Save "{sourceProfileName}" As...
       </h2>
 
@@ -114,8 +151,8 @@
       </div>
 
       <div class="modal-footer">
-        <button class="secondary" on:click={handleClose}>Cancel</button>
-        <button class="primary" on:click={handleSave}>Save</button>
+        <button class="secondary" onclick={handleClose}>Cancel</button>
+        <button class="primary" onclick={handleSave}>Save</button>
       </div>
     </div>
   </div>

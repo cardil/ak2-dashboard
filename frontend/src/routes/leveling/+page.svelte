@@ -245,11 +245,9 @@
     }
   }
 
-  async function handleSaveAs(
-    event: CustomEvent<{ target: any; name?: string }>,
-  ) {
+  async function handleSaveAs(detail: { target: any; name?: string }) {
     isSaveAsModalOpen = false
-    const { target, name } = event.detail
+    const { target, name } = detail
 
     try {
       const sourceId = $profilesStore.selectedProfile
@@ -316,56 +314,54 @@
               <FontAwesomeIcon icon={faCogs} /> Leveling Settings
             </h3>
           </svelte:fragment>
-          <div class="tool-section">
-            <div class="settings-form">
-              <div class="form-group">
-                <label for="grid">Grid Size</label>
-                <input
-                  type="number"
-                  id="grid"
-                  bind:value={localSettings.gridSize}
-                  min="2"
-                  max="10"
-                  disabled={$levelingStore.rebootNeeded}
-                />
-              </div>
-              <div class="form-group">
-                <label for="bed_temp">Bed Temp (°C)</label>
-                <input
-                  type="number"
-                  id="bed_temp"
-                  bind:value={localSettings.bedTemp}
-                  min="0"
-                  max="90"
-                  disabled={$levelingStore.rebootNeeded}
-                />
-              </div>
-              <div class="form-group">
-                <label
-                  for="precision"
-                  title="Controls the rounding precision when calculating the average of saved mesh profiles. Values are rounded to the nearest precision step (e.g., 0.01 rounds to nearest 0.01mm)."
-                  >Avg. Precision</label
+          <div class="settings-form">
+            <div class="form-group">
+              <label for="grid">Grid Size</label>
+              <input
+                type="number"
+                id="grid"
+                bind:value={localSettings.gridSize}
+                min="2"
+                max="10"
+                disabled={$levelingStore.rebootNeeded}
+              />
+            </div>
+            <div class="form-group">
+              <label for="bed_temp">Bed Temp (°C)</label>
+              <input
+                type="number"
+                id="bed_temp"
+                bind:value={localSettings.bedTemp}
+                min="0"
+                max="90"
+                disabled={$levelingStore.rebootNeeded}
+              />
+            </div>
+            <div class="form-group">
+              <label
+                for="precision"
+                title="Controls the rounding precision when calculating the average of saved mesh profiles. Values are rounded to the nearest precision step (e.g., 0.01 rounds to nearest 0.01mm)."
+                >Avg. Precision</label
+              >
+              <input
+                type="number"
+                id="precision"
+                bind:value={localSettings.precision}
+                step="0.001"
+                disabled={$levelingStore.rebootNeeded}
+                title="Controls the rounding precision when calculating the average of saved mesh profiles. Values are rounded to the nearest precision step (e.g., 0.01 rounds to nearest 0.01mm)."
+              />
+            </div>
+            <div class="form-group button-group">
+              {#if $levelingStore.rebootNeeded}
+                <button class="reboot" on:click={handleReboot}
+                  ><FontAwesomeIcon icon={faSave} /> Reboot Printer</button
                 >
-                <input
-                  type="number"
-                  id="precision"
-                  bind:value={localSettings.precision}
-                  step="0.001"
-                  disabled={$levelingStore.rebootNeeded}
-                  title="Controls the rounding precision when calculating the average of saved mesh profiles. Values are rounded to the nearest precision step (e.g., 0.01 rounds to nearest 0.01mm)."
-                />
-              </div>
-              <div class="form-group button-group">
-                {#if $levelingStore.rebootNeeded}
-                  <button class="reboot" on:click={handleReboot}
-                    ><FontAwesomeIcon icon={faSave} /> Reboot Printer</button
-                  >
-                {:else}
-                  <button class="primary" on:click={handleSaveSettings}
-                    ><FontAwesomeIcon icon={faSave} /> Save</button
-                  >
-                {/if}
-              </div>
+              {:else}
+                <button class="primary" on:click={handleSaveSettings}
+                  ><FontAwesomeIcon icon={faSave} /> Save</button
+                >
+              {/if}
             </div>
           </div>
         </Card>
@@ -375,70 +371,68 @@
           <svelte:fragment slot="title">
             <h3 class="card-title"><FontAwesomeIcon icon={faTh} /> Bed Mesh</h3>
           </svelte:fragment>
-          <div class="tool-section">
-            <div class="mesh-list">
-              {#if $levelingStore.activeMesh}
-                <div
-                  class="mesh-item"
-                  class:active={visualizedSlotId === "active"}
+          <div class="mesh-list">
+            {#if $levelingStore.activeMesh}
+              <div
+                class="mesh-item"
+                class:active={visualizedSlotId === "active"}
+              >
+                <span
+                  >{meshLabel} (Z-Offset: {$levelingStore.activeMesh
+                    .zOffset})</span
                 >
-                  <span
-                    >{meshLabel} (Z-Offset: {$levelingStore.activeMesh
-                      .zOffset})</span
+                <div class="button-group">
+                  <button
+                    class="small primary"
+                    on:click={() => (isSaveModalOpen = true)}
                   >
-                  <div class="button-group">
-                    <button
-                      class="small primary"
-                      on:click={() => (isSaveModalOpen = true)}
-                    >
-                      <FontAwesomeIcon icon={faSave} /> Save
-                    </button>
-                    <button
-                      class="small"
-                      on:click={() =>
-                        $levelingStore.activeMesh &&
-                        visualizeSlot($levelingStore.activeMesh)}
-                      disabled={visualizedSlotId === "active"}
-                    >
-                      <FontAwesomeIcon icon={faEye} />
-                      Visualize
-                    </button>
-                  </div>
+                    <FontAwesomeIcon icon={faSave} /> Save
+                  </button>
+                  <button
+                    class="small"
+                    on:click={() =>
+                      $levelingStore.activeMesh &&
+                      visualizeSlot($levelingStore.activeMesh)}
+                    disabled={visualizedSlotId === "active"}
+                  >
+                    <FontAwesomeIcon icon={faEye} />
+                    Visualize
+                  </button>
                 </div>
-              {/if}
+              </div>
+            {/if}
 
-              <!-- Average Mesh Special Slot -->
-              {#if $levelingStore.averageMesh}
-                <div
-                  class="mesh-item"
-                  class:active={visualizedSlotId === "average"}
-                >
-                  <span class="slot-name">
-                    Average
-                    {#if activeSlotId === "average"}
-                      <span class="active-label">active</span>
-                    {/if}
-                  </span>
-                  <div class="button-group">
-                    <button
-                      class="small"
-                      on:click={() => levelingStore.activateAverageMesh()}
-                      disabled={activeSlotId === "average"}
-                      ><FontAwesomeIcon icon={faCheckCircle} /> Activate</button
-                    >
-                    <button
-                      class="small"
-                      on:click={() =>
-                        $levelingStore.averageMesh &&
-                        visualizeSlot($levelingStore.averageMesh)}
-                      disabled={visualizedSlotId === "average"}
-                      ><FontAwesomeIcon icon={faEye} />
-                      Visualize
-                    </button>
-                  </div>
+            <!-- Average Mesh Special Slot -->
+            {#if $levelingStore.averageMesh}
+              <div
+                class="mesh-item"
+                class:active={visualizedSlotId === "average"}
+              >
+                <span class="slot-name">
+                  Average
+                  {#if activeSlotId === "average"}
+                    <span class="active-label">active</span>
+                  {/if}
+                </span>
+                <div class="button-group">
+                  <button
+                    class="small"
+                    on:click={() => levelingStore.activateAverageMesh()}
+                    disabled={activeSlotId === "average"}
+                    ><FontAwesomeIcon icon={faCheckCircle} /> Activate</button
+                  >
+                  <button
+                    class="small"
+                    on:click={() =>
+                      $levelingStore.averageMesh &&
+                      visualizeSlot($levelingStore.averageMesh)}
+                    disabled={visualizedSlotId === "average"}
+                    ><FontAwesomeIcon icon={faEye} />
+                    Visualize
+                  </button>
                 </div>
-              {/if}
-            </div>
+              </div>
+            {/if}
           </div>
         </Card>
       </div>
@@ -450,56 +444,51 @@
             <FontAwesomeIcon icon={faHdd} /> Saved Bed Meshes
           </h3>
         </svelte:fragment>
-        <div class="tool-section">
-          <div class="mesh-list">
-            {#each $levelingStore.savedMeshes as slot (slot.id)}
-              <div
-                class="mesh-item"
-                class:active={slot.id === visualizedSlotId}
-              >
-                <span class="slot-name">
-                  {slot.name}
-                  {#if slot.id === activeSlotId}
-                    <span class="active-label">active</span>
-                  {/if}
-                </span>
-                <div class="button-group">
-                  <button
-                    class="small"
-                    on:click={() => activateSlot(slot)}
-                    disabled={slot.id === activeSlotId}
-                    ><FontAwesomeIcon icon={faCheckCircle} /> Activate</button
-                  >
-                  <button
-                    class="small"
-                    on:click={() => visualizeSlot(slot)}
-                    disabled={slot.id === visualizedSlotId}
-                  >
-                    <FontAwesomeIcon icon={faEye} />
-                    Visualize
-                  </button>
-                  <button
-                    class="small danger"
-                    on:click={() => {
-                      if (typeof slot.id === "number") {
-                        deleteSlot(slot.id)
-                      }
-                    }}><FontAwesomeIcon icon={faTrash} /> Delete</button
-                  >
-                </div>
+        <div class="mesh-list">
+          {#each $levelingStore.savedMeshes as slot (slot.id)}
+            <div class="mesh-item" class:active={slot.id === visualizedSlotId}>
+              <span class="slot-name">
+                {slot.name}
+                {#if slot.id === activeSlotId}
+                  <span class="active-label">active</span>
+                {/if}
+              </span>
+              <div class="button-group">
+                <button
+                  class="small"
+                  on:click={() => activateSlot(slot)}
+                  disabled={slot.id === activeSlotId}
+                  ><FontAwesomeIcon icon={faCheckCircle} /> Activate</button
+                >
+                <button
+                  class="small"
+                  on:click={() => visualizeSlot(slot)}
+                  disabled={slot.id === visualizedSlotId}
+                >
+                  <FontAwesomeIcon icon={faEye} />
+                  Visualize
+                </button>
+                <button
+                  class="small danger"
+                  on:click={() => {
+                    if (typeof slot.id === "number") {
+                      deleteSlot(slot.id)
+                    }
+                  }}><FontAwesomeIcon icon={faTrash} /> Delete</button
+                >
               </div>
-            {/each}
-          </div>
-          <div class="button-group spaced">
-            <button class="danger" on:click={deleteAllSlots}
-              ><FontAwesomeIcon icon={faTrash} /> Delete all</button
-            >
-          </div>
+            </div>
+          {/each}
+        </div>
+        <div class="button-group spaced">
+          <button class="danger" on:click={deleteAllSlots}
+            ><FontAwesomeIcon icon={faTrash} /> Delete all</button
+          >
         </div>
       </Card>
     </div>
 
-    <div class="column">
+    <div class="column visualizer-column">
       <!-- Bed Mesh Visualizer Card -->
       <Card style="height: 100%;">
         <svelte:fragment slot="title">
@@ -508,8 +497,8 @@
             {isEditing ? "Bed Mesh Editor" : "Bed Mesh Visualizer"}
           </h3>
         </svelte:fragment>
-        <div class="tool-section">
-          <div style="flex-grow: 1; min-height: 0;">
+        <div class="visualizer-content">
+          <div class="visualizer-wrapper">
             <BedMeshVisualizer
               meshData={isEditing ? editedMeshData : visualizedMeshData}
               {isEditing}
@@ -543,12 +532,12 @@
     />
     <SaveAsModal
       isOpen={isSaveAsModalOpen}
-      on:close={() => (isSaveAsModalOpen = false)}
-      on:save={handleSaveAs}
+      onclose={() => (isSaveAsModalOpen = false)}
+      onsave={(detail) => handleSaveAs(detail)}
     />
     <ProfileManagerModal
       isOpen={isProfileManagerModalOpen}
-      on:close={() => (isProfileManagerModalOpen = false)}
+      onclose={() => (isProfileManagerModalOpen = false)}
     />
   </div>
 {/if}
@@ -596,16 +585,27 @@
     gap: 1rem;
   }
 
-  .tool-section {
+  .visualizer-content {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .visualizer-wrapper {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .visualizer-column {
+    min-height: 0;
   }
   .card-title {
     margin: 0;
-    padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--card-border-color);
+    padding-bottom: 0.75rem;
+    margin-bottom: -0.25rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;

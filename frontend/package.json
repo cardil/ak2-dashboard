@@ -9,7 +9,7 @@
     "build:mocks": "node test/mocks/buildMockCommands.mjs",
     "preview": "vite preview",
     "prepare": "npm run build:mocks && svelte-kit sync || echo ''",
-    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "prettier --check .",
     "lint:fix": "prettier --write .",

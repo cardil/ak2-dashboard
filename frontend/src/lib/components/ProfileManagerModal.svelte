@@ -1,20 +1,35 @@
 <script lang="ts">
   import { profilesStore } from "$lib/stores/profiles"
-  import { createEventDispatcher } from "svelte"
   import { FontAwesomeIcon } from "@fortawesome/svelte-fontawesome"
   import { faEdit, faTrash } from "@fortawesome/free-solid-svg-icons"
   import { toast } from "svelte-sonner"
 
-  export let isOpen = false
+  interface Props {
+    isOpen?: boolean
+    onclose?: () => void
+  }
 
-  const dispatch = createEventDispatcher()
+  let { isOpen = false, onclose }: Props = $props()
 
-  let editingId: number | null = null
-  let editingName = ""
+  let editingId: number | null = $state(null)
+  let editingName = $state("")
 
   function handleClose() {
-    dispatch("close")
+    onclose?.()
     cancelEdit()
+  }
+
+  function handleBackdropKeydown(event: KeyboardEvent) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault()
+      handleClose()
+    }
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      handleClose()
+    }
   }
 
   function startEdit(id: number, currentName: string) {
@@ -62,9 +77,24 @@
 </script>
 
 {#if isOpen}
-  <div class="modal-overlay" on:click={handleClose}>
-    <div class="modal-content" on:click|stopPropagation>
-      <h2>Manage Profiles</h2>
+  <div
+    class="modal-overlay"
+    onclick={handleClose}
+    onkeydown={handleBackdropKeydown}
+    role="button"
+    tabindex="0"
+    aria-label="Close modal"
+  >
+    <div
+      class="modal-content"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={handleKeydown}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      tabindex="-1"
+    >
+      <h2 id="modal-title">Manage Profiles</h2>
 
       <div class="modal-body">
         {#if $profilesStore.profiles.length === 0}
@@ -80,17 +110,17 @@
                     type="text"
                     bind:value={editingName}
                     class="edit-input"
-                    on:keydown={(e) => {
+                    onkeydown={(e) => {
+                      e.stopPropagation()
                       if (e.key === "Enter") saveEdit()
                       if (e.key === "Escape") cancelEdit()
                     }}
-                    autofocus
                   />
                   <div class="button-group">
-                    <button class="small primary" on:click={saveEdit}
+                    <button class="small primary" onclick={saveEdit}
                       >Save</button
                     >
-                    <button class="small secondary" on:click={cancelEdit}
+                    <button class="small secondary" onclick={cancelEdit}
                       >Cancel</button
                     >
                   </div>
@@ -104,14 +134,14 @@
                   <div class="button-group">
                     <button
                       class="icon-button"
-                      on:click={() => startEdit(profile.id, profile.name)}
+                      onclick={() => startEdit(profile.id, profile.name)}
                       title="Rename"
                     >
                       <FontAwesomeIcon icon={faEdit} />
                     </button>
                     <button
                       class="icon-button danger"
-                      on:click={() => deleteProfile(profile.id, profile.name)}
+                      onclick={() => deleteProfile(profile.id, profile.name)}
                       title="Delete"
                     >
                       <FontAwesomeIcon icon={faTrash} />
@@ -125,7 +155,7 @@
       </div>
 
       <div class="modal-footer">
-        <button class="secondary" on:click={handleClose}>Close</button>
+        <button class="secondary" onclick={handleClose}>Close</button>
       </div>
     </div>
   </div>
