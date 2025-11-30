@@ -1,0 +1,5 @@
+#!/bin/sh
+# rc.local - runs at startup like on the printer
+# This starts the webserver as configured by kobra2-fw-tools deployment
+
+/opt/bin/webfsd -p 80

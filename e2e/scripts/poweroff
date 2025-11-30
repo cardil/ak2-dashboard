@@ -1,0 +1,6 @@
+#!/bin/sh
+# Simulates poweroff
+echo "Simulating poweroff..."
+sync
+killall webfsd 2>/dev/null
+echo "System halted (simulated)"

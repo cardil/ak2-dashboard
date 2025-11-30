@@ -117,6 +117,7 @@ static struct HTTP_STATUS {
     char *body;
 } http[] = {
     {200, "200 OK", NULL},
+    {201, "201 Created", NULL},
     {206, "206 Partial Content", NULL},
     {304, "304 Not Modified", NULL},
     {400, "400 Bad Request", "*PLONK*\n"},

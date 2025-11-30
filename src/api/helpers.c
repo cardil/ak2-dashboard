@@ -239,8 +239,12 @@ int profile_name_exists(const char *name, int exclude_id) {
   return 0;
 }
 
+// Static buffer for get_json_value results (avoids modifying input)
+static char json_value_buffer[4096];
+
 // JSON parser using jsmn to find a value by key
-char* get_json_value(char* json, const char* key) {
+// Returns a pointer to a static buffer - NOT thread-safe, but avoids modifying input
+char* get_json_value(const char* json, const char* key) {
   jsmn_parser parser;
   jsmntok_t tokens[64];  // Enough for typical request bodies
   jsmn_init(&parser);
@@ -266,10 +270,14 @@ char* get_json_value(char* json, const char* key) {
         // Found key, get value from next token
         if (i + 1 < token_count) {
           int value_start = tokens[i + 1].start;
-          int value_end = tokens[i + 1].end;
-          // Null-terminate the value in-place
-          json[value_end] = '\0';
-          return json + value_start;
+          int value_len = tokens[i + 1].end - tokens[i + 1].start;
+          // Copy value to static buffer instead of modifying input
+          if (value_len >= (int)sizeof(json_value_buffer)) {
+            value_len = sizeof(json_value_buffer) - 1;
+          }
+          strncpy(json_value_buffer, json + value_start, value_len);
+          json_value_buffer[value_len] = '\0';
+          return json_value_buffer;
         }
       }
     }

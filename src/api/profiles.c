@@ -126,62 +126,65 @@ void handle_get_profile(struct REQUEST *req, const char *profile_id_str) {
 // PUT /api/profiles/{id} - Update profile name
 void handle_put_profile(struct REQUEST *req, const char *profile_id_str) {
   int profile_id = atoi(profile_id_str);
+  int status_code = 200;
 
   if (profile_id < 1 || profile_id > 20) {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid profile ID. Must be 1-20.\"}");
-    mkheader(req, 400);
+    status_code = 400;
   } else if (!dir_exists_profile(profile_id)) {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Profile not found\"}");
-    mkheader(req, 404);
+    status_code = 404;
   } else if (req->req_body == NULL) {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Missing request body.\"}");
-    mkheader(req, 400);
+    status_code = 400;
   } else {
     char *name = get_json_value(req->req_body, "\"name\"");
     if (!name || strlen(name) == 0) {
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"error\", \"message\": \"Missing or empty name.\"}");
-      mkheader(req, 400);
+      status_code = 400;
     } else if (strlen(name) > 50) {
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"error\", \"message\": \"Name too long. Maximum 50 characters.\"}");
-      mkheader(req, 400);
+      status_code = 400;
     } else if (profile_name_exists(name, profile_id)) {
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"error\", \"message\": \"A profile with this name already exists\"}");
-      mkheader(req, 400);
+      status_code = 400;
     } else {
       if (write_profile_name(profile_id, name) == 0) {
         snprintf(api_response_buffer, sizeof(api_response_buffer),
                 "{\"status\": \"success\", \"message\": \"Profile name updated.\"}");
-        mkheader(req, 200);
+        status_code = 200;
       } else {
         snprintf(api_response_buffer, sizeof(api_response_buffer),
                 "{\"status\": \"error\", \"message\": \"Failed to update profile name.\"}");
-        mkheader(req, 500);
+        status_code = 500;
       }
     }
   }
   req->body = api_response_buffer;
   req->lbody = strlen(api_response_buffer);
   req->mime = "application/json";
+  mkheader(req, status_code);
 }
 
 // DELETE /api/profiles/{id}
 void handle_delete_profile(struct REQUEST *req, const char *profile_id_str) {
   int profile_id = atoi(profile_id_str);
+  int status_code = 200;
 
   if (profile_id < 1 || profile_id > 20) {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid profile ID. Must be 1-20.\"}");
-    mkheader(req, 400);
+    status_code = 400;
   } else if (!dir_exists_profile(profile_id)) {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Profile not found\"}");
-    mkheader(req, 404);
+    status_code = 404;
   } else {
     char profile_dir[256];
     snprintf(profile_dir, sizeof(profile_dir), "/user/webfs/profiles/%d", profile_id);
@@ -195,16 +198,17 @@ void handle_delete_profile(struct REQUEST *req, const char *profile_id_str) {
 
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"success\", \"message\": \"Profile deleted.\"}");
-      mkheader(req, 200);
+      status_code = 200;
     } else {
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"error\", \"message\": \"Failed to delete profile.\"}");
-      mkheader(req, 500);
+      status_code = 500;
     }
   }
   req->body = api_response_buffer;
   req->lbody = strlen(api_response_buffer);
   req->mime = "application/json";
+  mkheader(req, status_code);
 }
 
 // POST /api/profiles/{id}/save-as
@@ -215,43 +219,54 @@ void handle_post_save_as(struct REQUEST *req, const char *source_id_str) {
   if (!is_source_current && (source_id < 1 || source_id > 20)) {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid source profile ID.\"}");
-    mkheader(req, 400);
     req->body = api_response_buffer;
     req->lbody = strlen(api_response_buffer);
     req->mime = "application/json";
+    mkheader(req, 400);
     return;
   }
 
   if (!is_source_current && !dir_exists_profile(source_id)) {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Source profile not found\"}");
-    mkheader(req, 404);
     req->body = api_response_buffer;
     req->lbody = strlen(api_response_buffer);
     req->mime = "application/json";
+    mkheader(req, 404);
     return;
   }
 
   if (req->req_body == NULL) {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Missing request body.\"}");
-    mkheader(req, 400);
     req->body = api_response_buffer;
     req->lbody = strlen(api_response_buffer);
     req->mime = "application/json";
+    mkheader(req, 400);
     return;
   }
 
-  char *target = get_json_value(req->req_body, "\"target\"");
-  char *name = get_json_value(req->req_body, "\"name\"");
+  // Note: get_json_value uses a static buffer, so we must copy values before subsequent calls
+  char target[64] = {0};
+  char name[256] = {0};
 
-  if (!target) {
+  char *target_val = get_json_value(req->req_body, "\"target\"");
+  if (target_val) {
+    strncpy(target, target_val, sizeof(target) - 1);
+  }
+
+  char *name_val = get_json_value(req->req_body, "\"name\"");
+  if (name_val) {
+    strncpy(name, name_val, sizeof(name) - 1);
+  }
+
+  if (target[0] == '\0') {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Missing target parameter.\"}");
-    mkheader(req, 400);
     req->body = api_response_buffer;
     req->lbody = strlen(api_response_buffer);
     req->mime = "application/json";
+    mkheader(req, 400);
     return;
   }
 
@@ -263,40 +278,40 @@ void handle_post_save_as(struct REQUEST *req, const char *source_id_str) {
   if (is_source_current && is_target_current) {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Cannot save current to current.\"}");
-    mkheader(req, 400);
     req->body = api_response_buffer;
     req->lbody = strlen(api_response_buffer);
     req->mime = "application/json";
+    mkheader(req, 400);
     return;
   }
 
   if (!is_source_current && !is_target_current && !is_target_new && source_id == target_id) {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Cannot save profile to itself.\"}");
-    mkheader(req, 400);
     req->body = api_response_buffer;
     req->lbody = strlen(api_response_buffer);
     req->mime = "application/json";
+    mkheader(req, 400);
     return;
   }
 
-  if (is_target_new && (!name || strlen(name) == 0)) {
+  if (is_target_new && strlen(name) == 0) {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Name required when creating new profile.\"}");
-    mkheader(req, 400);
     req->body = api_response_buffer;
     req->lbody = strlen(api_response_buffer);
     req->mime = "application/json";
+    mkheader(req, 400);
     return;
   }
 
   if (is_target_new && profile_name_exists(name, 0)) {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"A profile with this name already exists\"}");
-    mkheader(req, 400);
     req->body = api_response_buffer;
     req->lbody = strlen(api_response_buffer);
     req->mime = "application/json";
+    mkheader(req, 400);
     return;
   }
 
@@ -313,10 +328,10 @@ void handle_post_save_as(struct REQUEST *req, const char *source_id_str) {
     if (!found) {
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"error\", \"message\": \"Maximum of 20 profiles reached\"}");
-      mkheader(req, 400);
       req->body = api_response_buffer;
       req->lbody = strlen(api_response_buffer);
       req->mime = "application/json";
+      mkheader(req, 400);
       return;
     }
   }
@@ -331,10 +346,10 @@ void handle_post_save_as(struct REQUEST *req, const char *source_id_str) {
     if (detect_printer_defaults(NULL, &cfg_path, &cfg_filename, NULL) != 0) {
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"error\", \"message\": \"Could not detect printer configuration.\"}");
-      mkheader(req, 500);
       req->body = api_response_buffer;
       req->lbody = strlen(api_response_buffer);
       req->mime = "application/json";
+      mkheader(req, 500);
       return;
     }
 
@@ -346,10 +361,10 @@ void handle_post_save_as(struct REQUEST *req, const char *source_id_str) {
     if (!file_exists_api(src_printer_cfg)) {
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"error\", \"message\": \"Profile is corrupted. Cannot apply.\"}");
-      mkheader(req, 400);
       req->body = api_response_buffer;
       req->lbody = strlen(api_response_buffer);
       req->mime = "application/json";
+      mkheader(req, 400);
       return;
     }
 
@@ -364,10 +379,10 @@ void handle_post_save_as(struct REQUEST *req, const char *source_id_str) {
     if (custom_copy_file(src_printer_cfg, cfg_path, "wb", NULL) != 0) {
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"error\", \"message\": \"Failed to copy printer configuration.\"}");
-      mkheader(req, 500);
       req->body = api_response_buffer;
       req->lbody = strlen(api_response_buffer);
       req->mime = "application/json";
+      mkheader(req, 500);
       return;
     }
 
@@ -400,10 +415,10 @@ void handle_post_save_as(struct REQUEST *req, const char *source_id_str) {
 
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"success\", \"message\": \"Profile applied to printer. Please reboot for changes to take effect.\"}");
-    mkheader(req, 200);
     req->body = api_response_buffer;
     req->lbody = strlen(api_response_buffer);
     req->mime = "application/json";
+    mkheader(req, 200);
     return;
   }
 
@@ -422,10 +437,10 @@ void handle_post_save_as(struct REQUEST *req, const char *source_id_str) {
       rmdir_recursive(dst_dir);
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"error\", \"message\": \"Could not detect printer configuration.\"}");
-      mkheader(req, 500);
       req->body = api_response_buffer;
       req->lbody = strlen(api_response_buffer);
       req->mime = "application/json";
+      mkheader(req, 500);
       return;
     }
 
@@ -439,10 +454,10 @@ void handle_post_save_as(struct REQUEST *req, const char *source_id_str) {
       rmdir_recursive(dst_dir);
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"error\", \"message\": \"Failed to copy configuration files.\"}");
-      mkheader(req, 500);
       req->body = api_response_buffer;
       req->lbody = strlen(api_response_buffer);
       req->mime = "application/json";
+      mkheader(req, 500);
       return;
     }
 
@@ -469,23 +484,23 @@ void handle_post_save_as(struct REQUEST *req, const char *source_id_str) {
       rmdir_recursive(dst_dir);
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"error\", \"message\": \"Failed to copy profile.\"}");
-      mkheader(req, 500);
       req->body = api_response_buffer;
       req->lbody = strlen(api_response_buffer);
       req->mime = "application/json";
+      mkheader(req, 500);
       return;
     }
   }
 
   // Set name if creating new profile
-  if (is_target_new && name) {
+  if (is_target_new && strlen(name) > 0) {
     write_profile_name(target_id, name);
   }
 
   snprintf(api_response_buffer, sizeof(api_response_buffer),
           "{\"status\": \"success\", \"message\": \"Profile saved.\", \"id\": %d}", target_id);
-  mkheader(req, 201);
   req->body = api_response_buffer;
   req->lbody = strlen(api_response_buffer);
   req->mime = "application/json";
+  mkheader(req, 201);
 }

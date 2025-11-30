@@ -1,0 +1,26 @@
+{
+  "name": "ak2-e2e-tests",
+  "version": "1.0.0",
+  "description": "E2E tests for AK2 Dashboard using Playwright",
+  "type": "module",
+  "scripts": {
+    "postinstall": "playwright install chromium",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@lavamoat/allow-scripts": "^3.3.1",
+    "@lavamoat/preinstall-always-fail": "^2.1.0",
+    "@playwright/test": "^1.52.0"
+  },
+  "lavamoat": {
+    "allowScripts": {
+      "$root$": true,
+      "@lavamoat/preinstall-always-fail": false,
+      "@playwright/test": true
+    }
+  }
+}

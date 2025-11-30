@@ -178,6 +178,7 @@ function createLevelingStore() {
         isUpdating: false,
         error: e.message || `Failed to delete slot ${slotId}.`,
       }))
+      throw e
     }
   }
 
@@ -247,6 +248,7 @@ function createLevelingStore() {
         isUpdating: false,
         error: e.message || `Failed to save mesh to slot ${slotId}.`,
       }))
+      throw e
     }
   }
 
@@ -263,6 +265,7 @@ function createLevelingStore() {
         isUpdating: false,
         error: e.message || `Failed to save edited mesh to slot ${slotId}.`,
       }))
+      throw e
     }
   }
 
@@ -284,6 +287,7 @@ function createLevelingStore() {
         isUpdating: false,
         error: e.message || `Failed to activate slot ${slotId}.`,
       }))
+      throw e
     }
   }
 
@@ -307,6 +311,7 @@ function createLevelingStore() {
         isUpdating: false,
         error: e.message || "Failed to delete all slots.",
       }))
+      throw e
     }
   }
 
@@ -327,6 +332,7 @@ function createLevelingStore() {
           isUpdating: false,
           error: e.message || "Failed to activate average mesh.",
         }))
+        throw e
       }
     }
   }

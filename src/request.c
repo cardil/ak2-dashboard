@@ -1734,7 +1734,8 @@ restart:
     if (strncmp(req->hreq, "GET ", 4) != 0 &&
         strncmp(req->hreq, "PUT ", 4) != 0 &&
         strncmp(req->hreq, "HEAD ", 5) != 0 &&
-        strncmp(req->hreq, "POST ", 5) != 0) {
+        strncmp(req->hreq, "POST ", 5) != 0 &&
+        strncmp(req->hreq, "DELETE ", 7) != 0) {
         mkerror(req, 400, 0);
         return;
     }
@@ -2154,6 +2155,7 @@ void parse_request(struct REQUEST *req) {
     if (0 != strcmp(req->type, "GET") &&
         0 != strcmp(req->type, "HEAD") &&
         0 != strcmp(req->type, "PUT") &&
+        0 != strcmp(req->type, "POST") &&
         0 != strcmp(req->type, "DELETE")) {
         mkerror(req, 501, 0);
         return;
@@ -2227,15 +2229,12 @@ void parse_request(struct REQUEST *req) {
         }
 
         int body_read = 0;
-        char *header_end = strstr(req->hreq, "\r\n\r\n");
-        if (header_end) {
-            header_end += 4;
-            int body_start_offset = header_end - req->hreq;
-            int initial_body_len = req->hdata - body_start_offset;
-            if (initial_body_len > 0) {
-                memcpy(req->req_body, header_end, initial_body_len);
-                body_read = initial_body_len;
-            }
+        // Body starts at req->lreq (set by read_request after finding header end)
+        int body_start_offset = req->lreq;
+        int initial_body_len = req->hdata - body_start_offset;
+        if (initial_body_len > 0) {
+            memcpy(req->req_body, req->hreq + body_start_offset, initial_body_len);
+            body_read = initial_body_len;
         }
 
         while (body_read < req->content_length) {
@@ -2308,7 +2307,7 @@ void parse_request(struct REQUEST *req) {
     req->cache_turn_off = 'N';
 
     // process the custom pages
-    if (strncmp(req->path, "/api/leveling", 13) == 0) {
+    if (strncmp(req->path, "/api/profiles", 13) == 0) {
         handle_api_request(req, filename);
         return; // API request handled, don't continue with file serving
     } else {

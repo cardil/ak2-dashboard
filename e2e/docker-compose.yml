@@ -1,4 +1,4 @@
-version: '3.8'
+---
 
 services:
   printer-testbed:
@@ -11,9 +11,15 @@ services:
     container_name: ack2-e2e-testbed
     hostname: printer-testbed
     ports:
-      - "2222:22"   # SSH access for deployment
-      - "8080:80"   # Webserver HTTP access
+      - "20022:22"   # SSH access for deployment
+      - "20080:80"   # Webserver HTTP access
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "22"]
+      interval: 1s
+      timeout: 1s
+      retries: 5
+      start_period: 2s
     networks:
       - printer-net
 

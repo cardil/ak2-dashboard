@@ -171,17 +171,16 @@ static void create_root_doc_if_required(void) {
 
     if (stat("/user/webfs/profiles", &st) == -1) {
         // profiles folder does not exist
-        // create all profiles with the current configs
+        // create folder and one "Backup" profile with current configs
         mkdir("/user/webfs/profiles", 0700);
-        char buf[64];
-        int i;
-        for (i = 1; i < 10; i++) {
-            sprintf(buf, "/user/webfs/profiles/%d", i);
-            mkdir(buf, 0700);
-            sprintf(buf, "cp /user/printer*.cfg /user/webfs/profiles/%d", i);
-            system(buf);
-            sprintf(buf, "cp /user/unmodifiable.cfg /user/webfs/profiles/%d", i);
-            system(buf);
+        mkdir("/user/webfs/profiles/1", 0700);
+        system("cp /user/printer*.cfg /user/webfs/profiles/1");
+        system("cp /user/unmodifiable.cfg /user/webfs/profiles/1");
+        // Create metadata.json with name "Backup"
+        FILE *f = fopen("/user/webfs/profiles/1/metadata.json", "w");
+        if (f) {
+            fprintf(f, "{\"name\": \"Backup\"}");
+            fclose(f);
         }
     }
 

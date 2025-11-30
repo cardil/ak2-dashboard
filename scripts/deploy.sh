@@ -71,12 +71,17 @@ echo "${TICK} Package uploaded"
 
 # Install and restart webserver
 echo "${INFO} Installing and restarting webserver..."
+
+# Allow custom webfsd command (e.g., for debug mode with logging)
+# Default: /opt/bin/webfsd -p ${WEBFSD_PORT}
+WEBFSD_CMD="${WEBFSD_CMD:-/opt/bin/webfsd -p ${WEBFSD_PORT}}"
+
 if ! ${SSH_CMD} -p "${PRINTER_PORT}" "${PRINTER_USER}@${PRINTER_IP}" "
     cd / &&
     killall webfsd 2>/dev/null || true &&
     rm -rf /opt/webfs &&
     unzip -o webserver.zip &&
-    /opt/bin/webfsd -p ${WEBFSD_PORT} &&
+    ${WEBFSD_CMD} &&
     rm -f webserver.zip
 "; then
     echo "${CROSS} Deployment failed. Check prerequisites."

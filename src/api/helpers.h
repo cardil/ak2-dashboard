@@ -14,8 +14,8 @@ int copy_profile_directory(const char *src_dir, const char *dst_dir);
 void trim_trailing_whitespace(char *str);
 void json_escape_string(const char *src, char *dst, size_t dst_size);
 
-// JSON parsing
-char* get_json_value(char* json, const char* key);
+// JSON parsing (returns pointer to static buffer - NOT thread-safe)
+char* get_json_value(const char* json, const char* key);
 
 // Profile metadata
 char* read_profile_name(int profile_id, char *buffer, size_t bufsize);

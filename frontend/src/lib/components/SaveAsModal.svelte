@@ -1,5 +1,6 @@
 <script lang="ts">
   import { profilesStore } from "$lib/stores/profiles"
+  import { toast } from "svelte-sonner"
 
   interface Props {
     isOpen?: boolean
@@ -25,7 +26,7 @@
 
   function handleSave() {
     if (selectedTarget === "new" && !newProfileName.trim()) {
-      alert("Please enter a profile name")
+      toast.error("Name required: Please enter a profile name")
       return
     }
 

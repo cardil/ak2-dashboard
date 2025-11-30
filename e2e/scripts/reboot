@@ -1,0 +1,9 @@
+#!/bin/sh
+# Simulates reboot by restarting services like the printer does
+echo "Simulating reboot..."
+sync
+killall webfsd 2>/dev/null
+sleep 1
+# Execute rc.local like on the printer
+/etc/rc.local
+echo "Reboot simulation complete"

@@ -1,20 +1,27 @@
 # E2E Testbed Dockerfile - Simulates printer environment
-FROM alpine:3.19
+FROM docker.io/library/alpine:3.19
 
 # Install required packages
 RUN apk add --no-cache \
     openssh \
     openssh-sftp-server \
+    dropbear \
     unzip \
-    bash
+    bash \
+    supervisor
 
 # Create directory structure similar to the printer
-RUN mkdir -p /user/webfs/profiles \
+# Only directories that exist on a vanilla printer, NOT webfs dirs (those come from deploy)
+RUN mkdir -p /user \
     && mkdir -p /mnt/UDISK \
-    && mkdir -p /opt/webfs \
-    && mkdir -p /etc/webfs \
-    && chmod 755 /user /mnt /opt /etc \
-    && chmod 755 /user/webfs /mnt/UDISK /opt/webfs /etc/webfs
+    && mkdir -p /opt/bin \
+    && mkdir -p /opt/etc/init.d \
+    && mkdir -p /opt/scripts \
+    && chmod 755 /user /mnt /opt \
+    && chmod 755 /mnt/UDISK
+
+# Create the printer log file (not a directory)
+RUN touch /mnt/UDISK/log
 
 # Create root user's .ssh directory
 RUN mkdir -p /root/.ssh \
@@ -23,7 +30,7 @@ RUN mkdir -p /root/.ssh \
 # Set root password for SSH access
 RUN echo 'root:toor' | chpasswd
 
-# Configure SSH
+# Configure SSH (for deployment via sshd)
 RUN sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config \
     && sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
@@ -38,8 +45,23 @@ COPY e2e/config/unmodifiable.cfg /user/unmodifiable.cfg
 # Copy mime.types for webserver
 COPY webserver/etc/mime.types /etc/mime.types
 
+# Copy scripts
+COPY e2e/scripts/S51dropbear /opt/etc/init.d/S51dropbear
+COPY e2e/scripts/rc.local /etc/rc.local
+COPY e2e/scripts/reboot /sbin/reboot
+COPY e2e/scripts/poweroff /sbin/poweroff
+COPY e2e/scripts/supervisord.conf /etc/supervisord.conf
+COPY e2e/scripts/gen-bed-mesh.sh /opt/scripts/gen-bed-mesh.sh
+
+# Make scripts executable
+RUN chmod +x /opt/etc/init.d/S51dropbear \
+    && chmod +x /etc/rc.local \
+    && chmod +x /sbin/reboot \
+    && chmod +x /sbin/poweroff \
+    && chmod +x /opt/scripts/gen-bed-mesh.sh
+
 # Expose SSH and HTTP ports
 EXPOSE 22 80
 
-# Start SSH daemon
-CMD ["/usr/sbin/sshd", "-D", "-e"]
+# Start with supervisord to manage services
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
