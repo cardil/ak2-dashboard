@@ -14,7 +14,9 @@ WARN := $(YELLOW)⚠$(NC)
 ARROW := $(BLUE)➜$(NC)
 # --- Makefile Targets ---
 
-.PHONY: all build init lint compile test clean help build-only init-only lint-only compile-only test-only deploy
+.PHONY: all build init lint compile test clean help build-only init-only \
+	lint-only compile-only test-only deploy e2e-up e2e-down e2e-deploy \
+	e2e-logs e2e-clean
 
 all: build ## Build the entire project (default)
 
@@ -66,9 +68,49 @@ deploy: build ## Deploy to printer via SSH (interactive or: make deploy PRINTER_
 	PRINTER_USER="$(PRINTER_USER)" \
 	PRINTER_PORT="$(PRINTER_PORT)" \
 	WEBFSD_PORT="$(WEBFSD_PORT)" \
+	PRINTER_PASSWORD="$(PRINTER_PASSWORD)" \
 	./scripts/deploy.sh
 
-clean: ## Clean the project
+# --- E2E Testbed ---
+DOCKER := $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null)
+
+e2e-up: ## Start the E2E testbed container
+	@echo ""
+	@echo "$(BLUE)➜ Starting E2E Testbed...$(NC)"
+	@if [ -z "$(DOCKER)" ]; then \
+		echo "$(CROSS) Error: Neither docker nor podman found in PATH"; \
+		exit 1; \
+	fi
+	@cd e2e && $(DOCKER) compose up -d --build
+	@echo ""
+	@echo "$(TICK) E2E Testbed started successfully!"
+	@echo "$(INFO) SSH access: $(BLUE)ssh -p 2222 root@localhost$(NC) (password: toor)"
+	@echo "$(INFO) HTTP will be available at: $(BLUE)http://localhost:8080$(NC) (after deployment)"
+	@echo ""
+	@echo "$(INFO) To deploy, run: $(BLUE)make e2e-deploy$(NC)"
+	@echo ""
+
+e2e-down: ## Stop and remove the E2E testbed container
+	@echo ""
+	@echo "$(BLUE)➜ Stopping E2E Testbed...$(NC)"
+	@cd e2e && $(DOCKER) compose down
+	@echo "$(TICK) E2E Testbed stopped"
+	@echo ""
+
+e2e-deploy: build ## Deploy to the E2E testbed
+	@echo ""
+	@echo "$(BLUE)➜ Deploying to E2E Testbed...$(NC)"
+	@$(MAKE) deploy PRINTER_IP=localhost PRINTER_PORT=2222 PRINTER_USER=root WEBFSD_PORT=80 PRINTER_PASSWORD=toor
+
+e2e-clean: ## Stop testbed and remove volumes
+	@echo ""
+	@echo "$(BLUE)➜ Cleaning E2E Testbed...$(NC)"
+	@cd e2e && $(DOCKER) compose down -v
+	@rm -rf e2e/volumes
+	@echo "$(TICK) E2E Testbed cleaned"
+	@echo ""
+
+clean: e2e-clean ## Clean the project
 	@echo ""
 	@echo "$(BLUE)➜ Cleaning frontend...$(NC)"
 	@$(MAKE) -C frontend clean

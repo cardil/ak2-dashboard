@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  printer-testbed:
+    platform: linux/arm/v7
+    build:
+      context: ..
+      dockerfile: e2e/Dockerfile
+      platforms:
+        - linux/arm/v7
+    container_name: ack2-e2e-testbed
+    hostname: printer-testbed
+    ports:
+      - "2222:22"   # SSH access for deployment
+      - "8080:80"   # Webserver HTTP access
+    restart: unless-stopped
+    networks:
+      - printer-net
+
+networks:
+  printer-net:
+    driver: bridge

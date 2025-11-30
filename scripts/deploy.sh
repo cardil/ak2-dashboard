@@ -48,7 +48,22 @@ echo ""
 
 # Upload package
 echo "${INFO} Uploading package..."
-if ! scp -P "${PRINTER_PORT}" "$REPO_ROOT/webserver/webserver.zip" "${PRINTER_USER}@${PRINTER_IP}:/webserver.zip"; then
+
+# Setup SSH options for E2E testbed
+SSH_OPTS=""
+if [ -n "${PRINTER_PASSWORD}" ]; then
+    # Use sshpass for password authentication (E2E testbed)
+    SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    export SSHPASS="${PRINTER_PASSWORD}"
+    SCP_CMD="sshpass -e scp ${SSH_OPTS}"
+    SSH_CMD="sshpass -e ssh ${SSH_OPTS}"
+else
+    # Use normal SSH (real printer)
+    SCP_CMD="scp"
+    SSH_CMD="ssh"
+fi
+
+if ! ${SCP_CMD} -P "${PRINTER_PORT}" "$REPO_ROOT/webserver/webserver.zip" "${PRINTER_USER}@${PRINTER_IP}:/webserver.zip"; then
     echo "${CROSS} Upload failed. Ensure openssh-sftp-server is installed."
     exit 1
 fi
@@ -56,12 +71,12 @@ echo "${TICK} Package uploaded"
 
 # Install and restart webserver
 echo "${INFO} Installing and restarting webserver..."
-if ! ssh -p "${PRINTER_PORT}" "${PRINTER_USER}@${PRINTER_IP}" "
+if ! ${SSH_CMD} -p "${PRINTER_PORT}" "${PRINTER_USER}@${PRINTER_IP}" "
     cd / &&
     killall webfsd 2>/dev/null || true &&
     rm -rf /opt/webfs &&
     unzip -o webserver.zip &&
-    webfsd -p ${WEBFSD_PORT} &&
+    /opt/bin/webfsd -p ${WEBFSD_PORT} &&
     rm -f webserver.zip
 "; then
     echo "${CROSS} Deployment failed. Check prerequisites."
