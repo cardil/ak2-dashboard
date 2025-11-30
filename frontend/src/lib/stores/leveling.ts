@@ -1,6 +1,6 @@
 import { get, writable } from "svelte/store"
 import { browser } from "$app/environment"
-import * as api from "$lib/api/leveling"
+import * as api from "$lib/api/profiles"
 
 // --- Types ---
 
@@ -120,7 +120,7 @@ function createLevelingStore() {
     }
 
     try {
-      const status = await api.getLevelingStatus()
+      const status = await api.getProfile("current")
       const gridSize = status.settings.grid_size
 
       const activeMesh: MeshProfile = {
@@ -167,7 +167,7 @@ function createLevelingStore() {
   async function deleteSlot(slotId: number) {
     update((s) => ({ ...s, isUpdating: true }))
     try {
-      await api.deleteMeshSlot(slotId)
+      await api.deleteSlot("current", slotId)
       await fetchData() // Refetch data to update the state
     } catch (e: any) {
       update((s) => ({
@@ -187,12 +187,12 @@ function createLevelingStore() {
 
     update((s) => ({ ...s, isUpdating: true }))
     try {
-      const apiSettings: Omit<api.LevelingSettings, "z_offset"> = {
+      const apiSettings: Omit<api.ProfileSettings, "z_offset"> = {
         grid_size: settings.gridSize,
         bed_temp: settings.bedTemp,
         precision: settings.precision,
       }
-      const response = await api.saveLevelingSettings(apiSettings)
+      const response = await api.updateSettings("current", apiSettings)
 
       if (response.grid_size_changed) {
         update((s) => ({ ...s, rebootNeeded: true }))
@@ -232,7 +232,7 @@ function createLevelingStore() {
         throw new Error("No active mesh to save")
       }
       const meshData = store.activeMesh.data.flat().join(", ")
-      await api.saveActiveMesh(slotId, meshData)
+      await api.saveSlot("current", slotId, meshData)
       await fetchData()
     } catch (e: any) {
       update((s) => ({
@@ -247,7 +247,7 @@ function createLevelingStore() {
     update((s) => ({ ...s, isUpdating: true }))
     try {
       const meshData = editedData.flat().join(", ")
-      await api.saveActiveMesh(slotId, meshData) // Re-use the same API endpoint
+      await api.saveSlot("current", slotId, meshData) // Re-use the same API endpoint
       await fetchData()
     } catch (e: any) {
       update((s) => ({
@@ -267,7 +267,7 @@ function createLevelingStore() {
         throw new Error(`Slot ${slotId} not found`)
       }
       const meshData = slot.data.flat().join(", ")
-      await api.activateMeshSlot(slotId, meshData)
+      await api.updatePrinterMesh("current", meshData)
       await fetchData()
     } catch (e: any) {
       update((s) => ({
@@ -285,7 +285,7 @@ function createLevelingStore() {
       // Delete all slots individually since the backend doesn't support bulk delete
       const deletePromises = store.savedMeshes.map((slot) => {
         if (typeof slot.id === "number") {
-          return api.deleteMeshSlot(slot.id)
+          return api.deleteSlot("current", slot.id)
         }
         return Promise.resolve()
       })
@@ -305,7 +305,10 @@ function createLevelingStore() {
     if (store.averageMesh) {
       update((s) => ({ ...s, isUpdating: true }))
       try {
-        await api.activateMeshContent(store.averageMesh.data.flat().join(", "))
+        await api.updatePrinterMesh(
+          "current",
+          store.averageMesh.data.flat().join(", "),
+        )
         await fetchData()
       } catch (e: any) {
         update((s) => ({

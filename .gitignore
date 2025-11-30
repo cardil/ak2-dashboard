@@ -1,6 +1,8 @@
 .vscode/
 arm-*-cross
 src/*.o
+src/api/*.o
+src/vendor/
 src/webfsd
 src/webfsd.stripped
 webserver/webserver.zip

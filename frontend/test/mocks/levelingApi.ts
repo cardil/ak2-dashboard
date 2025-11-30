@@ -1,10 +1,10 @@
 import type { Connect } from "vite"
 
-// This file will mock the C backend API for leveling tools.
-// It will provide data structures and functions that simulate the
+// This file will mock the C backend API for profiles.
+// It provides data structures and functions that simulate the
 // responses from the C API, allowing for independent frontend development.
 
-export interface LevelingSettings {
+export interface ProfileSettings {
   grid_size: number
   bed_temp: number
   precision: number
@@ -21,10 +21,23 @@ export interface SavedMesh {
   mesh_data: string
 }
 
-export interface LevelingStatus {
-  settings: LevelingSettings
+export interface ProfileDetails {
+  id: number | "current"
+  name?: string // Optional for "current" profile
+  settings: ProfileSettings
   active_mesh: MeshData
   saved_meshes: SavedMesh[]
+  loaded_from?: number // Optional, indicates which profile was last applied to Current
+}
+
+export interface ProfileSummary {
+  id: number
+  name: string
+}
+
+export interface ProfileList {
+  loaded_from?: number // Optional, indicates which profile is currently loaded
+  profiles: ProfileSummary[]
 }
 
 // Function to generate dynamic mesh data for slopes
@@ -75,7 +88,9 @@ function generateSlopedMeshData(
 }
 
 // Mock data based on the C API structure
-const mockLevelingStatus: LevelingStatus = {
+const mockCurrentProfile: ProfileDetails = {
+  id: "current",
+  loaded_from: 1, // Indicates this was loaded from profile 1
   settings: {
     grid_size: 5,
     bed_temp: 60,
@@ -114,24 +129,43 @@ const mockLevelingStatus: LevelingStatus = {
   ],
 }
 
+const mockProfileList: ProfileList = {
+  loaded_from: 1,
+  profiles: [
+    { id: 1, name: "PLA - Spring Steel Plate" },
+    { id: 2, name: "PETG - Textured Plate" },
+    { id: 3, name: "Profile 3" },
+  ],
+}
+
 // --- Mock API Functions ---
 
-export async function getLevelingStatus(): Promise<LevelingStatus> {
-  console.log("Mock API: Fetching leveling status")
+export async function getProfiles(): Promise<ProfileList> {
+  console.log("Mock API: Fetching profile list")
   return new Promise((resolve) =>
-    setTimeout(() => resolve(mockLevelingStatus), 500),
+    setTimeout(() => resolve(mockProfileList), 500),
   )
 }
 
-export async function deleteMeshSlot(
+export async function getProfile(
+  id: number | "current",
+): Promise<ProfileDetails> {
+  console.log(`Mock API: Fetching profile ${id}`)
+  return new Promise((resolve) =>
+    setTimeout(() => resolve(mockCurrentProfile), 500),
+  )
+}
+
+export async function deleteSlot(
+  profileId: number | "current",
   slotId: number,
 ): Promise<{ status: string; message: string }> {
-  console.log(`Mock API: Deleting mesh slot ${slotId}`)
-  const index = mockLevelingStatus.saved_meshes.findIndex(
+  console.log(`Mock API: Deleting slot ${slotId} from profile ${profileId}`)
+  const index = mockCurrentProfile.saved_meshes.findIndex(
     (mesh) => mesh.id === slotId,
   )
   if (index !== -1) {
-    mockLevelingStatus.saved_meshes.splice(index, 1)
+    mockCurrentProfile.saved_meshes.splice(index, 1)
     return new Promise((resolve) =>
       setTimeout(
         () =>
@@ -158,23 +192,24 @@ export interface SaveSettingsResponse {
   grid_size_changed: boolean
 }
 
-export async function saveLevelingSettings(
-  settings: Omit<LevelingSettings, "z_offset">,
+export async function updateSettings(
+  profileId: number | "current",
+  settings: Omit<ProfileSettings, "z_offset">,
 ): Promise<SaveSettingsResponse> {
-  console.log(`Mock API: Saving leveling settings`, settings)
+  console.log(`Mock API: Updating settings for profile ${profileId}`, settings)
   let gridSizeChanged = false
-  if (settings.grid_size !== mockLevelingStatus.settings.grid_size) {
+  if (settings.grid_size !== mockCurrentProfile.settings.grid_size) {
     gridSizeChanged = true
-    mockLevelingStatus.saved_meshes = []
+    mockCurrentProfile.saved_meshes = []
     const newSize = settings.grid_size * settings.grid_size
-    mockLevelingStatus.active_mesh.mesh_data = Array(newSize)
+    mockCurrentProfile.active_mesh.mesh_data = Array(newSize)
       .fill("0.000000")
       .join(", ")
   }
   // Update settings but preserve z_offset (it's read-only)
-  mockLevelingStatus.settings = {
+  mockCurrentProfile.settings = {
     ...settings,
-    z_offset: mockLevelingStatus.settings.z_offset,
+    z_offset: mockCurrentProfile.settings.z_offset,
   }
 
   const response: SaveSettingsResponse = {
@@ -185,12 +220,13 @@ export async function saveLevelingSettings(
   return new Promise((resolve) => setTimeout(() => resolve(response), 500))
 }
 
-export async function saveActiveMesh(
+export async function saveSlot(
+  profileId: number | "current",
   slotId: number,
   meshData: string,
 ): Promise<{ status: string; message: string }> {
-  console.log(`Mock API: Saving active mesh to slot ${slotId}`)
-  if (!mockLevelingStatus.active_mesh) {
+  console.log(`Mock API: Saving mesh to slot ${slotId} in profile ${profileId}`)
+  if (!mockCurrentProfile.active_mesh) {
     return new Promise((resolve) =>
       setTimeout(
         () => resolve({ status: "error", message: "No active mesh to save." }),
@@ -198,7 +234,7 @@ export async function saveActiveMesh(
       ),
     )
   }
-  const existingSlot = mockLevelingStatus.saved_meshes.find(
+  const existingSlot = mockCurrentProfile.saved_meshes.find(
     (mesh) => mesh.id === slotId,
   )
   if (existingSlot) {
@@ -207,7 +243,7 @@ export async function saveActiveMesh(
     existingSlot.date = new Date().toISOString().slice(0, 19).replace("T", " ")
   } else {
     // Add new slot
-    mockLevelingStatus.saved_meshes.push({
+    mockCurrentProfile.saved_meshes.push({
       id: slotId,
       date: new Date().toISOString().slice(0, 19).replace("T", " "),
       mesh_data: meshData,
@@ -225,42 +261,12 @@ export async function saveActiveMesh(
   )
 }
 
-export async function activateMeshSlot(
-  slotId: number,
+export async function updatePrinterMesh(
+  profileId: number | "current",
   meshData: string,
 ): Promise<{ status: string; message: string }> {
-  console.log(`Mock API: Activating mesh from slot ${slotId}`)
-  const slotToActivate = mockLevelingStatus.saved_meshes.find(
-    (mesh) => mesh.id === slotId,
-  )
-  if (slotToActivate) {
-    // Use the provided meshData (which should match the slot)
-    mockLevelingStatus.active_mesh.mesh_data = meshData
-    return new Promise((resolve) =>
-      setTimeout(
-        () =>
-          resolve({
-            status: "success",
-            message: `Mesh from slot ${slotId} activated.`,
-          }),
-        500,
-      ),
-    )
-  } else {
-    return new Promise((resolve) =>
-      setTimeout(
-        () => resolve({ status: "error", message: "Slot not found." }),
-        500,
-      ),
-    )
-  }
-}
-
-export async function activateMeshContent(
-  meshData: string,
-): Promise<{ status: string; message: string }> {
-  console.log("Mock API: Activating mesh from content")
-  mockLevelingStatus.active_mesh.mesh_data = meshData
+  console.log(`Mock API: Updating printer mesh for profile ${profileId}`)
+  mockCurrentProfile.active_mesh.mesh_data = meshData
   return new Promise((resolve) =>
     setTimeout(
       () => resolve({ status: "success", message: "Mesh content activated." }),
@@ -274,7 +280,7 @@ export async function deleteAllMeshSlots(): Promise<{
   message: string
 }> {
   console.log(`Mock API: Deleting all mesh slots`)
-  mockLevelingStatus.saved_meshes = []
+  mockCurrentProfile.saved_meshes = []
   return new Promise((resolve) =>
     setTimeout(
       () => resolve({ status: "success", message: "All mesh slots deleted." }),
@@ -285,87 +291,155 @@ export async function deleteAllMeshSlots(): Promise<{
 
 export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
   return (req, res, next) => {
-    if (!req.url?.startsWith("/api/leveling")) {
-      return next()
-    }
+    // Handle new profiles API endpoints
+    if (req.url?.startsWith("/api/profiles")) {
+      res.setHeader("Content-Type", "application/json")
 
-    res.setHeader("Content-Type", "application/json")
+      // GET /api/profiles - List all profiles
+      if (req.method === "GET" && req.url === "/api/profiles") {
+        getProfiles().then((data) => {
+          res.end(JSON.stringify(data))
+        })
+        return
+      }
 
-    if (req.method === "GET" && req.url === "/api/leveling") {
-      getLevelingStatus().then((data) => {
-        res.end(JSON.stringify(data))
-      })
-      return
-    }
+      // GET /api/profiles/current - Get current profile details
+      if (req.method === "GET" && req.url === "/api/profiles/current") {
+        getProfile("current").then((data) => {
+          res.end(JSON.stringify(data))
+        })
+        return
+      }
 
-    // PUT /api/leveling/settings (changed from POST)
-    if (req.method === "PUT" && req.url === "/api/leveling/settings") {
-      let body = ""
-      req.on("data", (chunk) => {
-        body += chunk.toString()
-      })
-      req.on("end", () => {
-        const settings = JSON.parse(body)
-        saveLevelingSettings(settings).then((response) => {
-          res.statusCode = 200
+      // GET /api/profiles/{id} - Get specific profile details
+      const getProfileMatch = req.url.match(/^\/api\/profiles\/(\d+)$/)
+      if (req.method === "GET" && getProfileMatch) {
+        const profileId = parseInt(getProfileMatch[1], 10)
+        getProfile(profileId).then((data) => {
+          res.end(JSON.stringify(data))
+        })
+        return
+      }
+
+      // PUT /api/profiles/current/settings
+      if (
+        req.method === "PUT" &&
+        req.url === "/api/profiles/current/settings"
+      ) {
+        let body = ""
+        req.on("data", (chunk) => {
+          body += chunk.toString()
+        })
+        req.on("end", () => {
+          const settings = JSON.parse(body)
+          updateSettings("current", settings).then((response) => {
+            res.statusCode = 200
+            res.end(JSON.stringify(response))
+          })
+        })
+        return
+      }
+
+      // PUT /api/profiles/{id}/settings
+      const putSettingsMatch = req.url.match(
+        /^\/api\/profiles\/(\d+|current)\/settings$/,
+      )
+      if (req.method === "PUT" && putSettingsMatch) {
+        const profileId =
+          putSettingsMatch[1] === "current"
+            ? "current"
+            : parseInt(putSettingsMatch[1], 10)
+        let body = ""
+        req.on("data", (chunk) => {
+          body += chunk.toString()
+        })
+        req.on("end", () => {
+          const settings = JSON.parse(body)
+          updateSettings(profileId, settings).then((response) => {
+            res.statusCode = 200
+            res.end(JSON.stringify(response))
+          })
+        })
+        return
+      }
+
+      // PUT /api/profiles/current/slots/{id}
+      const putSlotMatch = req.url.match(
+        /^\/api\/profiles\/(current|\d+)\/slots\/(\d+)$/,
+      )
+      if (req.method === "PUT" && putSlotMatch) {
+        const profileId =
+          putSlotMatch[1] === "current"
+            ? "current"
+            : parseInt(putSlotMatch[1], 10)
+        const slotId = parseInt(putSlotMatch[2], 10)
+        let body = ""
+        req.on("data", (chunk) => {
+          body += chunk.toString()
+        })
+        req.on("end", () => {
+          const { mesh_data } = JSON.parse(body)
+          saveSlot(profileId, slotId, mesh_data).then((response) => {
+            res.statusCode = response.status === "success" ? 200 : 400
+            res.end(JSON.stringify(response))
+          })
+        })
+        return
+      }
+
+      // PUT /api/profiles/current/printer-mesh
+      const putPrinterMeshMatch = req.url.match(
+        /^\/api\/profiles\/(current|\d+)\/printer-mesh$/,
+      )
+      if (req.method === "PUT" && putPrinterMeshMatch) {
+        const profileId =
+          putPrinterMeshMatch[1] === "current"
+            ? "current"
+            : parseInt(putPrinterMeshMatch[1], 10)
+        let body = ""
+        req.on("data", (chunk) => {
+          body += chunk.toString()
+        })
+        req.on("end", () => {
+          const { mesh_data } = JSON.parse(body)
+          updatePrinterMesh(profileId, mesh_data).then((response) => {
+            res.statusCode = response.status === "success" ? 200 : 400
+            res.end(JSON.stringify(response))
+          })
+        })
+        return
+      }
+
+      // DELETE /api/profiles/current/slots/{id}
+      const deleteSlotMatch = req.url.match(
+        /^\/api\/profiles\/(current|\d+)\/slots\/(\d+)$/,
+      )
+      if (req.method === "DELETE" && deleteSlotMatch) {
+        const profileId =
+          deleteSlotMatch[1] === "current"
+            ? "current"
+            : parseInt(deleteSlotMatch[1], 10)
+        const slotId = parseInt(deleteSlotMatch[2], 10)
+        deleteSlot(profileId, slotId).then((response) => {
+          res.statusCode = response.status === "success" ? 200 : 404
           res.end(JSON.stringify(response))
         })
-      })
-      return
+        return
+      }
     }
 
-    // PUT /api/leveling/mesh/{id} (changed from POST /api/leveling/mesh/save)
-    const putMeshMatch = req.url.match(/^\/api\/leveling\/mesh\/(\d+)$/)
-    if (req.method === "PUT" && putMeshMatch) {
-      const slotId = parseInt(putMeshMatch[1], 10)
-      let body = ""
-      req.on("data", (chunk) => {
-        body += chunk.toString()
-      })
-      req.on("end", () => {
-        const { mesh_data } = JSON.parse(body)
-        saveActiveMesh(slotId, mesh_data).then((response) => {
-          res.statusCode = response.status === "success" ? 200 : 400
-          res.end(JSON.stringify(response))
+    // Fallback for old /api/leveling endpoints (for backward compatibility during transition)
+    if (req.url?.startsWith("/api/leveling")) {
+      res.setHeader("Content-Type", "application/json")
+
+      if (req.method === "GET" && req.url === "/api/leveling") {
+        getProfile("current").then((data) => {
+          res.end(JSON.stringify(data))
         })
-      })
-      return
-    }
+        return
+      }
 
-    // PUT /api/leveling/printer-mesh (changed from POST /api/leveling/mesh/activate/content)
-    if (req.method === "PUT" && req.url === "/api/leveling/printer-mesh") {
-      let body = ""
-      req.on("data", (chunk) => {
-        body += chunk.toString()
-      })
-      req.on("end", () => {
-        const { mesh_data } = JSON.parse(body)
-        activateMeshContent(mesh_data).then((response) => {
-          res.statusCode = response.status === "success" ? 200 : 400
-          res.end(JSON.stringify(response))
-        })
-      })
-      return
-    }
-
-    // DELETE /api/leveling/mesh/{id}
-    const deleteMatch = req.url.match(/^\/api\/leveling\/mesh\/(\d+)$/)
-    if (req.method === "DELETE" && deleteMatch) {
-      const slotId = parseInt(deleteMatch[1], 10)
-      deleteMeshSlot(slotId).then((response) => {
-        res.statusCode = response.status === "success" ? 200 : 404
-        res.end(JSON.stringify(response))
-      })
-      return
-    }
-
-    // DELETE /api/leveling/mesh/all (for mock compatibility, but backend doesn't support this)
-    if (req.method === "DELETE" && req.url === "/api/leveling/mesh/all") {
-      deleteAllMeshSlots().then((response) => {
-        res.statusCode = 200
-        res.end(JSON.stringify(response))
-      })
-      return
+      // Other old endpoints can redirect to new ones if needed
     }
 
     next()
