@@ -129,7 +129,90 @@ const mockCurrentProfile: ProfileDetails = {
   ],
 }
 
-const mockProfileList: ProfileList = {
+// Separate mock data for each saved profile
+const mockProfiles: Map<number, ProfileDetails> = new Map([
+  [
+    1,
+    {
+      id: 1,
+      name: "PLA - Spring Steel Plate",
+      settings: {
+        grid_size: 5,
+        bed_temp: 55,
+        precision: 0.01,
+        z_offset: 1.2,
+      },
+      active_mesh: {
+        mesh_data: generateSlopedMeshData(5, "x-positive"),
+      },
+      saved_meshes: [
+        {
+          id: 1,
+          date: "2025-11-10 09:15:00",
+          mesh_data: generateSlopedMeshData(5, "flat"),
+        },
+        {
+          id: 2,
+          date: "2025-11-09 14:30:00",
+          mesh_data: generateSlopedMeshData(5, "y-positive"),
+        },
+      ],
+    },
+  ],
+  [
+    2,
+    {
+      id: 2,
+      name: "PETG - Textured Plate",
+      settings: {
+        grid_size: 5,
+        bed_temp: 80,
+        precision: 0.02,
+        z_offset: 0.8,
+      },
+      active_mesh: {
+        mesh_data: generateSlopedMeshData(5, "x-negative"),
+      },
+      saved_meshes: [
+        {
+          id: 1,
+          date: "2025-11-08 11:45:00",
+          mesh_data: generateSlopedMeshData(5, "y-negative"),
+        },
+        {
+          id: 3,
+          date: "2025-11-07 16:20:00",
+          mesh_data: generateSlopedMeshData(5, "flat"),
+        },
+      ],
+    },
+  ],
+  [
+    3,
+    {
+      id: 3,
+      name: "Profile 3",
+      settings: {
+        grid_size: 5,
+        bed_temp: 70,
+        precision: 0.005,
+        z_offset: 1.0,
+      },
+      active_mesh: {
+        mesh_data: generateSlopedMeshData(5, "flat"),
+      },
+      saved_meshes: [
+        {
+          id: 1,
+          date: "2025-11-06 13:10:00",
+          mesh_data: generateSlopedMeshData(5, "x-positive"),
+        },
+      ],
+    },
+  ],
+])
+
+let mockProfileList: ProfileList = {
   loaded_from: 1,
   profiles: [
     { id: 1, name: "PLA - Spring Steel Plate" },
@@ -137,6 +220,9 @@ const mockProfileList: ProfileList = {
     { id: 3, name: "Profile 3" },
   ],
 }
+
+// Track next profile ID for creating new profiles
+let nextProfileId = 4
 
 // --- Mock API Functions ---
 
@@ -151,9 +237,34 @@ export async function getProfile(
   id: number | "current",
 ): Promise<ProfileDetails> {
   console.log(`Mock API: Fetching profile ${id}`)
-  return new Promise((resolve) =>
-    setTimeout(() => resolve(mockCurrentProfile), 500),
-  )
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      if (id === "current") {
+        resolve(mockCurrentProfile)
+      } else {
+        const profile = mockProfiles.get(id)
+        if (profile) {
+          resolve(profile)
+        } else {
+          // Return a default empty profile if not found
+          resolve({
+            id,
+            name: `Profile ${id}`,
+            settings: {
+              grid_size: 5,
+              bed_temp: 60,
+              precision: 0.01,
+              z_offset: 0,
+            },
+            active_mesh: {
+              mesh_data: generateSlopedMeshData(5, "flat"),
+            },
+            saved_meshes: [],
+          })
+        }
+      }
+    }, 500)
+  })
 }
 
 export async function deleteSlot(
@@ -161,11 +272,21 @@ export async function deleteSlot(
   slotId: number,
 ): Promise<{ status: string; message: string }> {
   console.log(`Mock API: Deleting slot ${slotId} from profile ${profileId}`)
-  const index = mockCurrentProfile.saved_meshes.findIndex(
-    (mesh) => mesh.id === slotId,
-  )
+
+  const profile =
+    profileId === "current" ? mockCurrentProfile : mockProfiles.get(profileId)
+  if (!profile) {
+    return new Promise((resolve) =>
+      setTimeout(
+        () => resolve({ status: "error", message: "Profile not found." }),
+        500,
+      ),
+    )
+  }
+
+  const index = profile.saved_meshes.findIndex((mesh) => mesh.id === slotId)
   if (index !== -1) {
-    mockCurrentProfile.saved_meshes.splice(index, 1)
+    profile.saved_meshes.splice(index, 1)
     return new Promise((resolve) =>
       setTimeout(
         () =>
@@ -197,19 +318,34 @@ export async function updateSettings(
   settings: Omit<ProfileSettings, "z_offset">,
 ): Promise<SaveSettingsResponse> {
   console.log(`Mock API: Updating settings for profile ${profileId}`, settings)
+
+  const profile =
+    profileId === "current" ? mockCurrentProfile : mockProfiles.get(profileId)
+  if (!profile) {
+    return new Promise((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            status: "error",
+            message: "Profile not found.",
+            grid_size_changed: false,
+          }),
+        500,
+      ),
+    )
+  }
+
   let gridSizeChanged = false
-  if (settings.grid_size !== mockCurrentProfile.settings.grid_size) {
+  if (settings.grid_size !== profile.settings.grid_size) {
     gridSizeChanged = true
-    mockCurrentProfile.saved_meshes = []
+    profile.saved_meshes = []
     const newSize = settings.grid_size * settings.grid_size
-    mockCurrentProfile.active_mesh.mesh_data = Array(newSize)
-      .fill("0.000000")
-      .join(", ")
+    profile.active_mesh.mesh_data = Array(newSize).fill("0.000000").join(", ")
   }
   // Update settings but preserve z_offset (it's read-only)
-  mockCurrentProfile.settings = {
+  profile.settings = {
     ...settings,
-    z_offset: mockCurrentProfile.settings.z_offset,
+    z_offset: profile.settings.z_offset,
   }
 
   const response: SaveSettingsResponse = {
@@ -226,7 +362,19 @@ export async function saveSlot(
   meshData: string,
 ): Promise<{ status: string; message: string }> {
   console.log(`Mock API: Saving mesh to slot ${slotId} in profile ${profileId}`)
-  if (!mockCurrentProfile.active_mesh) {
+
+  const profile =
+    profileId === "current" ? mockCurrentProfile : mockProfiles.get(profileId)
+  if (!profile) {
+    return new Promise((resolve) =>
+      setTimeout(
+        () => resolve({ status: "error", message: "Profile not found." }),
+        500,
+      ),
+    )
+  }
+
+  if (!profile.active_mesh) {
     return new Promise((resolve) =>
       setTimeout(
         () => resolve({ status: "error", message: "No active mesh to save." }),
@@ -234,16 +382,14 @@ export async function saveSlot(
       ),
     )
   }
-  const existingSlot = mockCurrentProfile.saved_meshes.find(
-    (mesh) => mesh.id === slotId,
-  )
+  const existingSlot = profile.saved_meshes.find((mesh) => mesh.id === slotId)
   if (existingSlot) {
     // Overwrite existing slot
     existingSlot.mesh_data = meshData
     existingSlot.date = new Date().toISOString().slice(0, 19).replace("T", " ")
   } else {
     // Add new slot
-    mockCurrentProfile.saved_meshes.push({
+    profile.saved_meshes.push({
       id: slotId,
       date: new Date().toISOString().slice(0, 19).replace("T", " "),
       mesh_data: meshData,
@@ -266,7 +412,19 @@ export async function updatePrinterMesh(
   meshData: string,
 ): Promise<{ status: string; message: string }> {
   console.log(`Mock API: Updating printer mesh for profile ${profileId}`)
-  mockCurrentProfile.active_mesh.mesh_data = meshData
+
+  const profile =
+    profileId === "current" ? mockCurrentProfile : mockProfiles.get(profileId)
+  if (!profile) {
+    return new Promise((resolve) =>
+      setTimeout(
+        () => resolve({ status: "error", message: "Profile not found." }),
+        500,
+      ),
+    )
+  }
+
+  profile.active_mesh.mesh_data = meshData
   return new Promise((resolve) =>
     setTimeout(
       () => resolve({ status: "success", message: "Mesh content activated." }),
@@ -284,6 +442,197 @@ export async function deleteAllMeshSlots(): Promise<{
   return new Promise((resolve) =>
     setTimeout(
       () => resolve({ status: "success", message: "All mesh slots deleted." }),
+      500,
+    ),
+  )
+}
+
+export async function createProfile(
+  sourceId: number | "current",
+  name: string,
+): Promise<{ status: string; message: string; id?: number }> {
+  console.log(
+    `Mock API: Creating profile from source ${sourceId} with name "${name}"`,
+  )
+
+  // Get source profile data
+  let sourceProfile: ProfileDetails
+  if (sourceId === "current") {
+    sourceProfile = mockCurrentProfile
+  } else {
+    const profile = mockProfiles.get(sourceId)
+    if (!profile) {
+      return new Promise((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              status: "error",
+              message: `Source profile ${sourceId} not found`,
+            }),
+          500,
+        ),
+      )
+    }
+    sourceProfile = profile
+  }
+
+  // Create new profile with copied data
+  const newId = nextProfileId++
+  const newProfile: ProfileDetails = {
+    id: newId,
+    name,
+    settings: { ...sourceProfile.settings },
+    active_mesh: { mesh_data: sourceProfile.active_mesh.mesh_data },
+    saved_meshes: sourceProfile.saved_meshes.map((sm) => ({
+      id: sm.id,
+      date: sm.date,
+      mesh_data: sm.mesh_data,
+    })),
+  }
+
+  mockProfiles.set(newId, newProfile)
+  mockProfileList.profiles.push({ id: newId, name })
+
+  return new Promise((resolve) =>
+    setTimeout(
+      () =>
+        resolve({
+          status: "success",
+          message: `Profile created with ID ${newId}`,
+          id: newId,
+        }),
+      500,
+    ),
+  )
+}
+
+export async function updateProfileMetadata(
+  id: number,
+  name: string,
+): Promise<{ status: string; message: string }> {
+  console.log(`Mock API: Updating profile ${id} name to "${name}"`)
+  const profile = mockProfileList.profiles.find((p) => p.id === id)
+  if (profile) {
+    profile.name = name
+    return new Promise((resolve) =>
+      setTimeout(
+        () => resolve({ status: "success", message: "Profile updated." }),
+        500,
+      ),
+    )
+  }
+  return new Promise((resolve) =>
+    setTimeout(
+      () => resolve({ status: "error", message: "Profile not found." }),
+      500,
+    ),
+  )
+}
+
+export async function deleteProfileById(
+  id: number,
+): Promise<{ status: string; message: string }> {
+  console.log(`Mock API: Deleting profile ${id}`)
+  const index = mockProfileList.profiles.findIndex((p) => p.id === id)
+  if (index !== -1) {
+    mockProfileList.profiles.splice(index, 1)
+    // Clear loaded_from if it matches the deleted profile
+    if (mockProfileList.loaded_from === id) {
+      mockProfileList.loaded_from = undefined
+      mockCurrentProfile.loaded_from = undefined
+    }
+    return new Promise((resolve) =>
+      setTimeout(
+        () => resolve({ status: "success", message: "Profile deleted." }),
+        500,
+      ),
+    )
+  }
+  return new Promise((resolve) =>
+    setTimeout(
+      () => resolve({ status: "error", message: "Profile not found." }),
+      500,
+    ),
+  )
+}
+
+export async function saveAsProfile(
+  sourceId: number | "current",
+  target: "new" | "current" | number,
+  name?: string,
+): Promise<{ status: string; message: string; id?: number }> {
+  console.log(
+    `Mock API: Saving profile ${sourceId} to target ${target}${name ? ` with name "${name}"` : ""}`,
+  )
+
+  // Validate illegal operations
+  if (sourceId === "current" && target === "current") {
+    return new Promise((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            status: "error",
+            message: "Cannot save current to current",
+          }),
+        500,
+      ),
+    )
+  }
+  if (typeof sourceId === "number" && sourceId === target) {
+    return new Promise((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            status: "error",
+            message: "Cannot save profile to itself",
+          }),
+        500,
+      ),
+    )
+  }
+
+  if (target === "new") {
+    if (!name) {
+      return new Promise((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              status: "error",
+              message: "Name is required for new profile",
+            }),
+          500,
+        ),
+      )
+    }
+    return createProfile(sourceId, name)
+  }
+
+  if (target === "current") {
+    // Apply profile to current
+    if (typeof sourceId === "number") {
+      mockProfileList.loaded_from = sourceId
+      mockCurrentProfile.loaded_from = sourceId
+    }
+    return new Promise((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            status: "success",
+            message: "Profile applied to current. Reboot required.",
+          }),
+        500,
+      ),
+    )
+  }
+
+  // Overwrite existing profile
+  return new Promise((resolve) =>
+    setTimeout(
+      () =>
+        resolve({
+          status: "success",
+          message: `Profile ${sourceId} copied to profile ${target}`,
+        }),
       500,
     ),
   )
@@ -423,6 +772,58 @@ export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
         deleteSlot(profileId, slotId).then((response) => {
           res.statusCode = response.status === "success" ? 200 : 404
           res.end(JSON.stringify(response))
+        })
+        return
+      }
+
+      // PUT /api/profiles/{id} - Update profile metadata
+      const putProfileMatch = req.url.match(/^\/api\/profiles\/(\d+)$/)
+      if (req.method === "PUT" && putProfileMatch) {
+        const profileId = parseInt(putProfileMatch[1], 10)
+        let body = ""
+        req.on("data", (chunk) => {
+          body += chunk.toString()
+        })
+        req.on("end", () => {
+          const { name } = JSON.parse(body)
+          updateProfileMetadata(profileId, name).then((response) => {
+            res.statusCode = response.status === "success" ? 200 : 404
+            res.end(JSON.stringify(response))
+          })
+        })
+        return
+      }
+
+      // DELETE /api/profiles/{id} - Delete profile
+      const deleteProfileMatch = req.url.match(/^\/api\/profiles\/(\d+)$/)
+      if (req.method === "DELETE" && deleteProfileMatch) {
+        const profileId = parseInt(deleteProfileMatch[1], 10)
+        deleteProfileById(profileId).then((response) => {
+          res.statusCode = response.status === "success" ? 200 : 404
+          res.end(JSON.stringify(response))
+        })
+        return
+      }
+
+      // POST /api/profiles/{id}/save-as - Save profile to target
+      const saveAsMatch = req.url.match(
+        /^\/api\/profiles\/(current|\d+)\/save-as$/,
+      )
+      if (req.method === "POST" && saveAsMatch) {
+        const sourceId =
+          saveAsMatch[1] === "current"
+            ? "current"
+            : parseInt(saveAsMatch[1], 10)
+        let body = ""
+        req.on("data", (chunk) => {
+          body += chunk.toString()
+        })
+        req.on("end", () => {
+          const { target, name } = JSON.parse(body)
+          saveAsProfile(sourceId, target, name).then((response) => {
+            res.statusCode = response.status === "success" ? 200 : 400
+            res.end(JSON.stringify(response))
+          })
         })
         return
       }

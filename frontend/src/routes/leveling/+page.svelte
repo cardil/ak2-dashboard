@@ -3,6 +3,9 @@
   import BedMeshVisualizer from "$lib/components/BedMeshVisualizer.svelte"
   import BedMeshDataTable from "$lib/components/BedMeshDataTable.svelte"
   import SaveMeshModal from "$lib/components/SaveMeshModal.svelte"
+  import ProfileSelector from "$lib/components/ProfileSelector.svelte"
+  import SaveAsModal from "$lib/components/SaveAsModal.svelte"
+  import ProfileManagerModal from "$lib/components/ProfileManagerModal.svelte"
   import { FontAwesomeIcon } from "@fortawesome/svelte-fontawesome"
   import {
     faCogs,
@@ -13,9 +16,11 @@
     faTrash,
     faFileMedical,
     faHdd,
+    faUser,
   } from "@fortawesome/free-solid-svg-icons"
   import { get } from "svelte/store"
   import { levelingStore } from "$lib/stores/leveling"
+  import { profilesStore } from "$lib/stores/profiles"
   import type { MeshProfile } from "$lib/stores/leveling"
   import Spinner from "$lib/components/Spinner.svelte"
   import InfoModal from "$lib/components/InfoModal.svelte"
@@ -41,6 +46,9 @@
   let visualizedMeshData: number[][] = []
   let visualizedSlotId: number | string | null = null
   let activeSlotId: number | string | null = null
+  let isSaveAsModalOpen = false
+  let isProfileManagerModalOpen = false
+
   $: if ($levelingStore.activeMesh) {
     const activeDataString = JSON.stringify($levelingStore.activeMesh.data)
     const foundSlot = $levelingStore.savedMeshes.find(
@@ -236,6 +244,43 @@
       levelingStore.deleteAllSlots()
     }
   }
+
+  async function handleSaveAs(
+    event: CustomEvent<{ target: any; name?: string }>,
+  ) {
+    isSaveAsModalOpen = false
+    const { target, name } = event.detail
+
+    try {
+      const sourceId = $profilesStore.selectedProfile
+      await profilesStore.saveAs(sourceId, target, name)
+
+      if (target === "current") {
+        toast.success("Profile applied to printer. Reboot required.")
+      } else if (target === "new") {
+        toast.success(`Profile "${name}" created successfully`)
+      } else {
+        toast.success("Profile saved successfully")
+      }
+
+      // Refetch leveling data if we're still on the same profile
+      await levelingStore.fetchData()
+    } catch (e: any) {
+      toast.error(e.message || "Failed to save profile")
+    }
+  }
+
+  // Reactive label for mesh based on selection
+  $: meshLabel =
+    $profilesStore.selectedProfile === "current" ? "Active Mesh" : "Saved Mesh"
+
+  // Watch for profile changes and refetch data
+  $: if ($profilesStore.selectedProfile) {
+    // Reset visualization state when switching profiles
+    visualizedSlotId = null
+    visualizedMeshData = []
+    levelingStore.fetchData()
+  }
 </script>
 
 {#if $levelingStore.isLoading}
@@ -250,6 +295,19 @@
   {/if}
   <div class="page-container">
     <div class="column">
+      <!-- Profile Selector Card -->
+      <Card>
+        <svelte:fragment slot="title">
+          <h3 class="card-title">
+            <FontAwesomeIcon icon={faUser} /> Profile
+          </h3>
+        </svelte:fragment>
+        <ProfileSelector
+          onSaveAs={() => (isSaveAsModalOpen = true)}
+          onManage={() => (isProfileManagerModalOpen = true)}
+        />
+      </Card>
+
       <div class="column-group">
         <!-- Leveling Settings Card -->
         <Card>
@@ -325,7 +383,7 @@
                   class:active={visualizedSlotId === "active"}
                 >
                   <span
-                    >Active (Z-Offset: {$levelingStore.activeMesh
+                    >{meshLabel} (Z-Offset: {$levelingStore.activeMesh
                       .zOffset})</span
                   >
                   <div class="button-group">
@@ -483,6 +541,15 @@
       on:confirm={() => executeSaveSettings()}
       on:reboot={() => handleReboot()}
     />
+    <SaveAsModal
+      isOpen={isSaveAsModalOpen}
+      on:close={() => (isSaveAsModalOpen = false)}
+      on:save={handleSaveAs}
+    />
+    <ProfileManagerModal
+      isOpen={isProfileManagerModalOpen}
+      on:close={() => (isProfileManagerModalOpen = false)}
+    />
   </div>
 {/if}
 
@@ -493,7 +560,6 @@
     gap: 1rem;
     padding: 1rem;
     height: 100%;
-    /* align-items: start; */
   }
 
   .loading-container,
