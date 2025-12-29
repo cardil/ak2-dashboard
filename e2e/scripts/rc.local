@@ -2,4 +2,8 @@
 # rc.local - runs at startup like on the printer
 # This starts the webserver as configured by kobra2-fw-tools deployment
 
-/opt/bin/webfsd -p 80
+# Only start if webfsd binary exists and not already running
+if [ -x /opt/bin/webfsd ] && ! pidof webfsd > /dev/null; then
+    /opt/bin/webfsd -p 80
+    echo "webfsd started"
+fi

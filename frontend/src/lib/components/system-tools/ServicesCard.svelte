@@ -42,11 +42,13 @@
           <Fa icon={$systemInfo.ssh_status === 2 ? faStop : faPlay} />
           {$systemInfo.ssh_status === 2 ? "Stop" : "Start"}
         </button>
-        <button
-          class="reboot"
-          on:click={() => onHandleSystemAction("ssh_restart")}
-          title="Restart SSH service"><Fa icon={faSync} /> Restart</button
-        >
+        {#if $systemInfo.ssh_status === 2}
+          <button
+            class="reboot"
+            on:click={() => onHandleSystemAction("ssh_restart")}
+            title="Restart SSH service"><Fa icon={faSync} /> Restart</button
+          >
+        {/if}
       </div>
     {:else}
       <p>Loading...</p>

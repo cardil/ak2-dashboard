@@ -795,7 +795,7 @@ int update_api(void) {
     ut_s = uptime % 60;
     U32 total_mem = sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
     U32 free_mem = sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE);
-    U32 free_mem_per = (free_mem * 100) / total_mem;
+    U32 free_mem_per = ((U64)free_mem * 100) / total_mem;
     U32 cpu_use = 0;
     U32 cpu_usr_use = 0;
     U32 cpu_sys_use = 0;
@@ -805,13 +805,14 @@ int update_api(void) {
     system_with_output("cat /proc/stat", 1);
     int n = sscanf(system_buffer, "%s %d %d %d %d %d %d %d %d %d %d", cpu, &t0, &t1, &t2, &t3, &t4, &t5, &t6, &t7, &t8, &t9);
     if (n == 11) {
-        cpu_use = ((t0 + t2) * 100) / (t0 + t2 + t3);
-        cpu_usr_use = (t0 * 100) / (t0 + t2 + t3);
-        cpu_sys_use = (t2 * 100) / (t0 + t2 + t3);
-        cpu_idle = (t3 * 100) / (t0 + t2 + t3);
+        U64 total = (U64)t0 + t2 + t3;
+        cpu_use = (((U64)t0 + t2) * 100) / total;
+        cpu_usr_use = ((U64)t0 * 100) / total;
+        cpu_sys_use = ((U64)t2 * 100) / total;
+        cpu_idle = ((U64)t3 * 100) / total;
     }
     int ssh_status = get_ssh_status();
-    sprintf(static_template_buffer, "{\"api_ver\":1, \"total_mem\":%d, \"free_mem\":%d, \"free_mem_per\":%d, \"cpu_use\":%d, \"cpu_usr_use\":%d, \"cpu_sys_use\":%d, \"cpu_idle\":%d, \"ssh_status\":%d, \"uptime\": \"%02d:%02d:%02d\"}", total_mem, free_mem, free_mem_per, cpu_use, cpu_usr_use, cpu_sys_use, cpu_idle, ssh_status, ut_h, ut_m, ut_s);
+    sprintf(static_template_buffer, "{\"api_ver\":1, \"total_mem\":%u, \"free_mem\":%u, \"free_mem_per\":%u, \"cpu_use\":%u, \"cpu_usr_use\":%u, \"cpu_sys_use\":%u, \"cpu_idle\":%u, \"ssh_status\":%d, \"uptime\": \"%02d:%02d:%02d\"}", total_mem, free_mem, free_mem_per, cpu_use, cpu_usr_use, cpu_sys_use, cpu_idle, ssh_status, ut_h, ut_m, ut_s);
     // export buffer to file
     return custom_copy_file(NULL, "/mnt/UDISK/webfs/api/info.json", "wb", static_template_buffer);
 }
