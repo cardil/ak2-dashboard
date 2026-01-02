@@ -25,7 +25,7 @@ E2E_HTTP_PORT ?= 20080
 # Default: SSH to local testbed
 # For real hardware: E2E_GEN_MESH_CMD="ssh root@192.168.1.x '/opt/scripts/gen-bed-mesh.sh'"
 E2E_GEN_MESH_CMD ?= sshpass -p 'toor' ssh -o StrictHostKeyChecking=no \
-	-p $(E2E_SSH_PORT) root@localhost '/opt/scripts/gen-bed-mesh.sh'
+	-o UserKnownHostsFile=/dev/null -p $(E2E_SSH_PORT) root@localhost '/opt/scripts/gen-bed-mesh.sh'
 
 .PHONY: up down deploy gen-mesh clean test test-ui test-debug test-headed init help all
 
@@ -52,11 +52,15 @@ down: ## Stop and remove the E2E testbed container
 	@echo "$(TICK) E2E Testbed stopped"
 	@echo ""
 
-# Debug webfsd command for E2E - logs to printer log file
-# The command runs in background; using nohup to detach properly
+# Webfsd command for E2E
+# Set E2E_DEBUG=1 to enable debug mode with verbose logging
+ifdef E2E_DEBUG
 E2E_WEBFSD_CMD ?= nohup /opt/bin/webfsd -d -p 80 > /mnt/UDISK/log 2>&1 & sleep 1
+else
+E2E_WEBFSD_CMD ?= nohup /opt/bin/webfsd -p 80 >> /mnt/UDISK/log 2>&1 & sleep 1
+endif
 
-deploy: ## Deploy to the E2E testbed (builds first)
+deploy: ## Deploy to the E2E testbed (builds first). Use E2E_DEBUG=1 for debug mode
 	@echo ""
 	@echo "$(BLUE)➜ Deploying to E2E Testbed...$(NC)"
 	@$(MAKE) -C $(ROOT_DIR) deploy PRINTER_IP=localhost \

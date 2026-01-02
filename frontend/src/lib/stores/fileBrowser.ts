@@ -34,7 +34,9 @@ function createFileBrowserStore() {
           : currentPath.endsWith("/")
             ? currentPath
             : `${currentPath}/`
-      const response = await fetch(fetchPath)
+      const response = await fetch(fetchPath, {
+        headers: { Accept: "application/json" },
+      })
       if (response.ok) {
         const contentType = response.headers.get("content-type") || ""
         if (contentType.includes("application/json")) {

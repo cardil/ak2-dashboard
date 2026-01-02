@@ -2169,6 +2169,7 @@ void parse_request(struct REQUEST *req) {
     /* parse header lines */
     req->keep_alive = req->minor;
     req->content_length = 0;
+    req->accept_json = 0;
     for (h = req->hreq; h - req->hreq < req->lreq;) {
         h = strchr(h, '\n');
         if (NULL == h)
@@ -2202,6 +2203,9 @@ void parse_request(struct REQUEST *req) {
             req->range_hdr = h + 13;
         } else if (0 == strncasecmp(h, "Content-Length: ", 16)) {
             req->content_length = atoi(h + 16);
+        } else if (0 == strncasecmp(h, "Accept: ", 8)) {
+            if (strstr(h + 8, "application/json"))
+                req->accept_json = 1;
         }
     }
     if (debug) {
@@ -2396,10 +2400,31 @@ void parse_request(struct REQUEST *req) {
             }
             return;
         }
-        strftime(req->mtime, sizeof(req->mtime), RFC1123, gmtime(&req->bst.st_mtime));
-        req->mime = "text/html";
-        req->dir = get_dir(req, filename);
-        if (NULL == req->body) {
+        // Set modification time and current time for directory listings
+        struct tm tm_mtime, tm_ctime;
+        time_t curtime;
+        time(&curtime);
+
+        gmtime_r(&req->bst.st_mtime, &tm_mtime);
+        gmtime_r(&curtime, &tm_ctime);
+
+        strftime(req->mtime, sizeof(req->mtime), RFC1123, &tm_mtime);
+        strftime(req->ctime, sizeof(req->ctime), RFC1123, &tm_ctime);
+
+        if (req->accept_json) {
+            /* JSON directory listing */
+            req->mime = "application/json";
+            req->dir = NULL;
+            int json_len = 0;
+            req->body = get_dir_json(filename, req->path, &json_len);
+            if (req->body) {
+                req->lbody = json_len;
+            }
+        } else {
+            req->mime = "text/html";
+            req->dir = get_dir(req, filename);
+        }
+        if (NULL == req->body && NULL == req->dir) {
             /* We arrive here if opendir failed, probably due to -EPERM
             * It does exist (see the stat() call above) */
             mkerror(req, 403, 1);
@@ -2483,15 +2508,20 @@ regular_file:
 
     req->mime = get_mime(filename);
 
-    //  current time
+    // Set modification time and current time for regular files
+    struct tm tm_mtime, tm_ctime;
     time_t curtime;
     time(&curtime);
+
     if (req->cache_turn_off == 'Y') {
-        strftime(req->mtime, sizeof(req->mtime), RFC1123, localtime(&curtime));
+        gmtime_r(&curtime, &tm_mtime);
     } else {
-        strftime(req->mtime, sizeof(req->mtime), RFC1123, gmtime(&req->bst.st_mtime));
+        gmtime_r(&req->bst.st_mtime, &tm_mtime);
     }
-    strftime(req->ctime, sizeof(req->mtime), RFC1123, localtime(&curtime));
+    gmtime_r(&curtime, &tm_ctime);
+
+    strftime(req->mtime, sizeof(req->mtime), RFC1123, &tm_mtime);
+    strftime(req->ctime, sizeof(req->ctime), RFC1123, &tm_ctime);
     if (NULL != req->if_range && 0 != strcmp(req->if_range, req->mtime))
         /* mtime mismatch -> no ranges */
         req->ranges = 0;

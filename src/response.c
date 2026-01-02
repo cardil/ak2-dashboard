@@ -232,6 +232,15 @@ void mkheader(struct REQUEST *req, int status) {
     off_t len;
     time_t expires;
 
+    // Initialize ctime if not already set (e.g., for API responses)
+    if (req->ctime[0] == '\0') {
+        struct tm tm_now;
+        time_t now_time;
+        time(&now_time);
+        gmtime_r(&now_time, &tm_now);
+        strftime(req->ctime, sizeof(req->ctime), RFC1123, &tm_now);
+    }
+
     for (i = 0; http[i].status != 0; i++)
         if (http[i].status == status)
             break;

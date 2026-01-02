@@ -338,6 +338,48 @@ test.describe('Leveling Page - Settings', () => {
     const saveButton = settingsForm.locator('button:has-text("Save")');
     await expect(saveButton).toBeVisible();
   });
+
+  test('should update grid size setting with confirmation modal', async ({ page }) => {
+    const settingsForm = page.locator('.settings-form');
+
+    // Find grid size input and change it
+    const gridSizeInput = settingsForm.locator('input[type="number"]').first();
+    const originalValue = await gridSizeInput.inputValue();
+    const newValue = originalValue === '5' ? '6' : '5';
+    await gridSizeInput.fill(newValue);
+
+    // Click Save button
+    const saveButton = settingsForm.locator('button:has-text("Save")');
+    await saveButton.click();
+
+    // Wait for confirmation modal with exact title
+    await expect(page.locator('text=Confirm Grid Size Change')).toBeVisible({ timeout: 5000 });
+
+    // Verify destructive operation warning is shown
+    await expect(page.locator('text=All saved mesh profiles will be deleted')).toBeVisible();
+
+    // Click the Confirm button (danger button)
+    const confirmButton = page.locator('button:has-text("Confirm")');
+    await confirmButton.click();
+
+    // Wait for reboot modal or success message
+    await expect(page.locator('text=/Reboot|Settings saved/i')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('should update bed temperature setting', async ({ page }) => {
+    const settingsForm = page.locator('.settings-form');
+
+    // Find bed temp input (second number input)
+    const bedTempInput = settingsForm.locator('input[type="number"]').nth(1);
+    await bedTempInput.fill('65');
+
+    // Click Save button
+    const saveButton = settingsForm.locator('button:has-text("Save")');
+    await saveButton.click();
+
+    // Wait for success message
+    await expect(page.locator('text=/Settings updated|success/i')).toBeVisible({ timeout: 10000 });
+  });
 });
 
 test.describe('Leveling Page - Bed Mesh Visualizer', () => {

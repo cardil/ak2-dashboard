@@ -574,12 +574,14 @@ mainloop(void *thread_arg) {
                 }
                 list_free(&req->header);
                 memset(req->mtime, 0, sizeof(req->mtime));
+                memset(req->ctime, 0, sizeof(req->ctime));
 
                 if (req->bfd != -1) {
                     close(req->bfd);
                     req->bfd = -1;
                 }
                 req->body = NULL;
+                req->mime = NULL;
                 req->written = 0;
                 req->head_only = 0;
                 req->rh = 0;
@@ -907,6 +909,8 @@ int main(int argc, char *argv[]) {
                 "  group : %s\n",
                 res->ai_family == PF_INET6 ? "yes" : "no",
                 server_host, host, tcp_port, doc_root, user, group);
+    } else {
+        fprintf(stderr, "webfsd started on port %d\n", tcp_port);
     }
 
     /* run as daemon - detach from terminal */

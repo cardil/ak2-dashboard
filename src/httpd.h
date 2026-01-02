@@ -76,6 +76,7 @@ struct REQUEST {
     char *cors;
     char *req_body;
     int content_length;
+    int accept_json;     /* client wants JSON response */
 
     /* response */
     int status;                /* status code (log) */
@@ -180,6 +181,7 @@ void write_request(struct REQUEST *req);
 void init_quote(void);
 char *quote(unsigned char *path, int maxlength);
 struct DIRCACHE *get_dir(struct REQUEST *req, char *filename);
+char *get_dir_json(char *filename, char *path, int *length);
 void free_dir(struct DIRCACHE *dir);
 
 /* --- mime.c --------------------------------------------------- */
