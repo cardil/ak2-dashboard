@@ -362,8 +362,25 @@ test.describe('Leveling Page - Settings', () => {
     const confirmButton = page.locator('button:has-text("Confirm")');
     await confirmButton.click();
 
-    // Wait for reboot modal or success message
-    await expect(page.locator('text=/Reboot|Settings saved/i')).toBeVisible({ timeout: 10000 });
+    // Wait for success message
+    await expect(page.locator('text=/Settings saved|success/i')).toBeVisible({ timeout: 10000 });
+
+    // Verify the grid size was actually updated by reloading and checking
+    await page.reload();
+    await page.waitForSelector('.settings-form');
+    const updatedGridSizeInput = page.locator('.settings-form input[type="number"]').first();
+    await expect(updatedGridSizeInput).toHaveValue(newValue);
+
+    // Verify mesh was zeroed (all values should be 0.000000)
+    const meshTable = page.locator('table');
+    await expect(meshTable).toBeVisible();
+    const cells = meshTable.locator('td');
+    const cellCount = await cells.count();
+    // Check first few cells are zero
+    for (let i = 0; i < Math.min(5, cellCount); i++) {
+      const cellText = await cells.nth(i).textContent();
+      expect(cellText?.trim()).toMatch(/^0\.0+$/);
+    }
   });
 
   test('should update bed temperature setting', async ({ page }) => {
@@ -379,6 +396,12 @@ test.describe('Leveling Page - Settings', () => {
 
     // Wait for success message
     await expect(page.locator('text=/Settings updated|success/i')).toBeVisible({ timeout: 10000 });
+
+    // Verify the bed temperature was actually updated
+    await page.reload();
+    await page.waitForSelector('.settings-form');
+    const updatedBedTempInput = page.locator('.settings-form input[type="number"]').nth(1);
+    await expect(updatedBedTempInput).toHaveValue('65');
   });
 });
 

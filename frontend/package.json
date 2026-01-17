@@ -20,6 +20,8 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@lavamoat/allow-scripts": "^3.3.1",
+    "@lavamoat/preinstall-always-fail": "^2.1.0",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.47.1",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
@@ -52,5 +54,14 @@
     "prismjs": "^1.30.0",
     "socket.io-client": "^4.8.1",
     "svelte-sonner": "^1.0.6"
+  },
+  "lavamoat": {
+    "allowScripts": {
+      "$root$": true,
+      "@lavamoat/preinstall-always-fail": false,
+      "@sveltejs/kit": true,
+      "vite>esbuild": false,
+      "vite>rollup": false
+    }
   }
 }

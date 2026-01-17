@@ -14,7 +14,7 @@ INFO := $(BLUE)ℹ$(NC)
 WARN := $(YELLOW)⚠$(NC)
 ARROW := $(BLUE)➜$(NC)
 
-DOCKER := $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null)
+DOCKER := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
 ROOT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))/..
 
 # E2E testbed ports
@@ -36,7 +36,16 @@ up: ## Start the E2E testbed container
 		echo "$(CROSS) Error: Neither docker nor podman found in PATH"; \
 		exit 1; \
 	fi
-	@$(DOCKER) compose up -d --build --wait
+	@$(DOCKER) compose up -d --build
+	@printf "$(INFO) Waiting for testbed to be ready"
+	@for i in $$(seq 1 30); do \
+		status="$$($(DOCKER) container inspect --format '{{.State.Health.Status}}' ak2-testbed 2>/dev/null)"; \
+		if [ "$$status" = "healthy" ]; then \
+			break; \
+		fi; \
+		printf "."; \
+		sleep 1; \
+	done
 	@echo ""
 	@echo "$(TICK) E2E Testbed started successfully!"
 	@echo "$(INFO) SSH access: $(BLUE)ssh -p $(E2E_SSH_PORT) root@localhost$(NC) (password: toor)"

@@ -33,6 +33,7 @@ init: node_modules ## Initialize the project
 node_modules: package.json package-lock.json
 	@echo "$(BLUE)➜ Installing frontend dependencies...$(NC)"
 	npm install
+	./node_modules/.bin/allow-scripts
 	@touch node_modules
 	@mkdir -p $(STAMP_DIR)
 

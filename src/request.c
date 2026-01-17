@@ -1160,6 +1160,7 @@ int update_printer_config_file(const char *config_file, const char *parameter_na
     char par[128];
     int par_size;
     char eol[2];
+    int match_found = 0;
 
     // make a copy of the original config file
     custom_copy_file(config_file, "/user/printer-config.bak", "wb", NULL);
@@ -1186,6 +1187,10 @@ int update_printer_config_file(const char *config_file, const char *parameter_na
                 // line processing...
                 if (strncmp(b, par, par_size) == 0) {
                     // this is the line with the requested parameter, modify it
+                    match_found = 1;
+                    if (debug)
+                        fprintf(stderr, "update_printer_config_file: MATCH! param='%s' old_line='%.*s' new_value='%s'\n",
+                                parameter_name, n - 1, b, replacement_value);
                     fwrite(par, 1, par_size, ofile);
                     fwrite(replacement_value, 1, strlen(replacement_value), ofile);
                     fwrite(eol, 1, 1, ofile);
@@ -1194,6 +1199,9 @@ int update_printer_config_file(const char *config_file, const char *parameter_na
                     fwrite(b, 1, n, ofile);
                 }
             }
+            if (debug && !match_found)
+                fprintf(stderr, "update_printer_config_file: NO MATCH for param='%s' in file='%s'\n",
+                        parameter_name, config_file);
             fclose(ifile);
             fflush(ofile);
             fclose(ofile);

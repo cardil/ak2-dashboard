@@ -157,14 +157,29 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
   int grid_size_changed = 0;
 
   // Parse request body
+  // Note: get_json_value() uses a static buffer, so we must copy values immediately
   char body_copy[req->content_length + 1];
-  strcpy(body_copy, req->req_body);
 
-  char *grid_size_str = get_json_value(body_copy, "\"grid_size\"");
+  // Get grid_size and copy to local buffer
   strcpy(body_copy, req->req_body);
-  char *bed_temp_str = get_json_value(body_copy, "\"bed_temp\"");
+  char grid_size_buf[16] = {0};
+  char *tmp = get_json_value(body_copy, "\"grid_size\"");
+  if (tmp) strncpy(grid_size_buf, tmp, sizeof(grid_size_buf) - 1);
+  char *grid_size_str = grid_size_buf[0] ? grid_size_buf : NULL;
+
+  // Get bed_temp and copy to local buffer
   strcpy(body_copy, req->req_body);
-  char *precision_str = get_json_value(body_copy, "\"precision\"");
+  char bed_temp_buf[16] = {0};
+  tmp = get_json_value(body_copy, "\"bed_temp\"");
+  if (tmp) strncpy(bed_temp_buf, tmp, sizeof(bed_temp_buf) - 1);
+  char *bed_temp_str = bed_temp_buf[0] ? bed_temp_buf : NULL;
+
+  // Get precision and copy to local buffer
+  strcpy(body_copy, req->req_body);
+  char precision_buf[16] = {0};
+  tmp = get_json_value(body_copy, "\"precision\"");
+  if (tmp) strncpy(precision_buf, tmp, sizeof(precision_buf) - 1);
+  char *precision_str = precision_buf[0] ? precision_buf : NULL;
 
   const char *config_file;
   const char *cfg_filename;
@@ -205,7 +220,15 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
         len += snprintf(flat_mesh + len, sizeof(flat_mesh) - len,
           "0.000000%s", (i == (new_grid_size * new_grid_size - 1)) ? "" : ", ");
       }
-      update_printer_config_file(config_file, "points", flat_mesh);
+      if (update_printer_config_file(config_file, "points", flat_mesh) != 0) {
+        snprintf(api_response_buffer, sizeof(api_response_buffer),
+                "{\"status\": \"error\", \"message\": \"Failed to update mesh points.\"}");
+        req->body = api_response_buffer;
+        req->lbody = strlen(api_response_buffer);
+        req->mime = "application/json";
+        mkheader(req, 500);
+        return;
+      }
 
       // Delete profile slots if changing settings
       if (!is_current) {
@@ -226,12 +249,28 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
       // Update probe_count
       char replacement_value[8];
       snprintf(replacement_value, sizeof(replacement_value), "%d,%d", new_grid_size, new_grid_size);
-      update_printer_config_file(config_file, "probe_count", replacement_value);
+      if (update_printer_config_file(config_file, "probe_count", replacement_value) != 0) {
+        snprintf(api_response_buffer, sizeof(api_response_buffer),
+                "{\"status\": \"error\", \"message\": \"Failed to update probe_count.\"}");
+        req->body = api_response_buffer;
+        req->lbody = strlen(api_response_buffer);
+        req->mime = "application/json";
+        mkheader(req, 500);
+        return;
+      }
     }
   }
 
   if (bed_temp_str) {
-    update_printer_config_file(config_file, "bed_mesh_temp", bed_temp_str);
+    if (update_printer_config_file(config_file, "bed_mesh_temp", bed_temp_str) != 0) {
+      snprintf(api_response_buffer, sizeof(api_response_buffer),
+              "{\"status\": \"error\", \"message\": \"Failed to update bed_mesh_temp.\"}");
+      req->body = api_response_buffer;
+      req->lbody = strlen(api_response_buffer);
+      req->mime = "application/json";
+      mkheader(req, 500);
+      return;
+    }
   }
 
   if (precision_str && is_current) {
