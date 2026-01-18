@@ -2,6 +2,7 @@
 
 services:
   printer-testbed:
+    image: localhost/e2e_printer-testbed:latest
     platform: linux/arm/v7
     build:
       context: ..
