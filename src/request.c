@@ -781,6 +781,53 @@ int get_ssh_status(void) {
     return ssh_status;
 }
 
+// Read a U64 value from a file (used for cgroup memory files)
+// Returns 0 on success, -1 on failure
+static int read_u64_from_file(const char *path, U64 *value) {
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+    char buf[64];
+    if (fgets(buf, sizeof(buf), f) == NULL) {
+        fclose(f);
+        return -1;
+    }
+    fclose(f);
+    // Check for "max" which means no limit
+    if (strncmp(buf, "max", 3) == 0) {
+        *value = 0;  // signal no limit
+        return -1;
+    }
+    *value = strtoull(buf, NULL, 10);
+    return 0;
+}
+
+// Get memory info, preferring cgroup v2 files for container awareness
+// Falls back to sysinfo() if cgroup files are not available
+static void get_memory_info(U64 *total_mem, U64 *free_mem) {
+    U64 cgroup_max = 0;
+    U64 cgroup_current = 0;
+
+    // Try cgroup v2 first (container-aware)
+    int has_max = (read_u64_from_file("/sys/fs/cgroup/memory.max", &cgroup_max) == 0);
+    int has_current = (read_u64_from_file("/sys/fs/cgroup/memory.current", &cgroup_current) == 0);
+
+    if (has_max && has_current && cgroup_max > 0) {
+        // We have valid cgroup limits - use them
+        *total_mem = cgroup_max;
+        *free_mem = (cgroup_max > cgroup_current) ? (cgroup_max - cgroup_current) : 0;
+    } else {
+        // Fall back to sysinfo for bare metal
+        struct sysinfo s_info;
+        if (sysinfo(&s_info) == 0) {
+            *total_mem = (U64)s_info.totalram * (U64)s_info.mem_unit;
+            *free_mem = (U64)s_info.freeram * (U64)s_info.mem_unit;
+        } else {
+            *total_mem = 0;
+            *free_mem = 0;
+        }
+    }
+}
+
 // update /mnt/UDISK/webfs/api/info.json
 int update_api(void) {
     struct sysinfo s_info;
@@ -793,9 +840,11 @@ int update_api(void) {
     ut_h = uptime / 3600;
     ut_m = (uptime / 60) % 60;
     ut_s = uptime % 60;
-    U32 total_mem = sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
-    U32 free_mem = sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE);
-    U32 free_mem_per = ((U64)free_mem * 100) / total_mem;
+    // Get memory info (cgroup-aware for containers, sysinfo fallback for bare metal)
+    U64 total_mem = 0;
+    U64 free_mem = 0;
+    get_memory_info(&total_mem, &free_mem);
+    U64 free_mem_per = total_mem > 0 ? (free_mem * 100) / total_mem : 0;
     U32 cpu_use = 0;
     U32 cpu_usr_use = 0;
     U32 cpu_sys_use = 0;
@@ -812,7 +861,7 @@ int update_api(void) {
         cpu_idle = ((U64)t3 * 100) / total;
     }
     int ssh_status = get_ssh_status();
-    sprintf(static_template_buffer, "{\"api_ver\":1, \"total_mem\":%u, \"free_mem\":%u, \"free_mem_per\":%u, \"cpu_use\":%u, \"cpu_usr_use\":%u, \"cpu_sys_use\":%u, \"cpu_idle\":%u, \"ssh_status\":%d, \"uptime\": \"%02d:%02d:%02d\"}", total_mem, free_mem, free_mem_per, cpu_use, cpu_usr_use, cpu_sys_use, cpu_idle, ssh_status, ut_h, ut_m, ut_s);
+    sprintf(static_template_buffer, "{\"api_ver\":1, \"total_mem\":%llu, \"free_mem\":%llu, \"free_mem_per\":%llu, \"cpu_use\":%u, \"cpu_usr_use\":%u, \"cpu_sys_use\":%u, \"cpu_idle\":%u, \"ssh_status\":%d, \"uptime\": \"%02d:%02d:%02d\"}", (unsigned long long)total_mem, (unsigned long long)free_mem, (unsigned long long)free_mem_per, cpu_use, cpu_usr_use, cpu_sys_use, cpu_idle, ssh_status, ut_h, ut_m, ut_s);
     // export buffer to file
     return custom_copy_file(NULL, "/mnt/UDISK/webfs/api/info.json", "wb", static_template_buffer);
 }
