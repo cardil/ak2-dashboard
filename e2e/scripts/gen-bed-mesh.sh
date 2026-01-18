@@ -4,64 +4,94 @@
 
 CONFIG_FILE="/user/printer.cfg"
 
-# Realistic 5x5 base mesh data (typical bed with slight warping pattern)
-# Values show a common "bowl" shape with center slightly lower
-BASE_POINTS="+0.085 +0.042 +0.015 +0.038 +0.075 \
-+0.048 +0.018 -0.008 +0.012 +0.042 \
-+0.022 -0.012 -0.035 -0.018 +0.015 \
-+0.045 +0.008 -0.015 +0.005 +0.038 \
-+0.078 +0.035 +0.008 +0.032 +0.068"
-
-# Add random variation of +/- 0.02mm to a value
-add_variation() {
-    base=$1
-    # Get random number 0-40000 and shift to -20000 to +20000 (microns for +/- 0.02mm)
-    if [ -r /dev/urandom ]; then
-        rand=$(od -An -tu2 -N2 /dev/urandom | tr -d ' ')
+# Get grid size from probe_count in config (e.g., "5,5" -> 5)
+get_grid_size() {
+    probe_count=$(grep "^probe_count : " "$CONFIG_FILE" | sed 's/probe_count : //' | cut -d',' -f1)
+    if [ -z "$probe_count" ]; then
+        echo "5"  # Default to 5x5 if not found
     else
-        rand=$((RANDOM % 40000))
-    fi
-    # Scale to -20 to +20 (in units of 0.001mm)
-    variation=$(( (rand % 40) - 20 ))
-    
-    # Parse base value (handle sign)
-    sign="+"
-    case $base in
-        -*) sign="-"; base="${base#-}" ;;
-        +*) sign="+"; base="${base#+}" ;;
-    esac
-    
-    # Convert to integer (in units of 0.001mm = microns/1000)
-    int_val=$(echo "$base" | awk '{printf "%d", $1 * 1000}')
-    
-    # Apply sign
-    if [ "$sign" = "-" ]; then
-        int_val=$(( -int_val ))
-    fi
-    
-    # Add variation
-    new_val=$(( int_val + variation ))
-    
-    # Format back to +/- 0.XXXXXX
-    if [ $new_val -ge 0 ]; then
-        printf "+0.%06d" $((new_val * 1000))
-    else
-        printf "-0.%06d" $(( -new_val * 1000))
+        echo "$probe_count"
     fi
 }
 
-# Generate mesh points with small random variations
+# Generate mesh points dynamically based on grid size
+# Uses pure shell integer math for speed (no awk/bc in loop)
 generate_mesh_points() {
+    grid_size=$(get_grid_size)
+    total_points=$((grid_size * grid_size))
+    center_x2=$((grid_size - 1))  # center * 2 to avoid floats
+
+    # Get all random bytes at once (2 bytes per point for variation)
+    if [ -r /dev/urandom ]; then
+        rand_hex=$(od -An -tx1 -N$((total_points * 2)) /dev/urandom | tr -d ' \n')
+    else
+        rand_hex=""
+    fi
+
     result=""
     count=0
-    for point in $BASE_POINTS; do
-        count=$((count + 1))
-        varied=$(add_variation "$point")
-        if [ $count -eq 25 ]; then
-            result="$result $varied"
-        else
-            result="$result$varied, "
-        fi
+    rand_idx=0
+    row=0
+
+    while [ $row -lt $grid_size ]; do
+        col=0
+        while [ $col -lt $grid_size ]; do
+            count=$((count + 1))
+
+            # Distance from center using integer math (scaled by 2 to match center_x2)
+            row_x2=$((row * 2))
+            col_x2=$((col * 2))
+            dr=$((row_x2 - center_x2))
+            dc=$((col_x2 - center_x2))
+            if [ $dr -lt 0 ]; then dr=$((-dr)); fi
+            if [ $dc -lt 0 ]; then dc=$((-dc)); fi
+
+            # Normalized distance: 0 at center, ~2000 at corners (scaled by 1000)
+            # max distance is center_x2 * 2 (diagonal)
+            if [ $center_x2 -gt 0 ]; then
+                dist=$((((dr + dc) * 1000) / (center_x2 * 2)))
+            else
+                dist=0
+            fi
+
+            # Bowl shape: edges +80, center -35 (in units of 0.001mm = microns)
+            # base = -35 + dist * 115 / 1000
+            base=$(( -35 + (dist * 115) / 1000 ))
+
+            # Get random variation +/- 20 from pre-fetched bytes
+            if [ -n "$rand_hex" ]; then
+                # Extract 2 hex chars (1 byte = 0-255)
+                hex_byte=$(echo "$rand_hex" | cut -c$((rand_idx + 1))-$((rand_idx + 2)))
+                rand_idx=$((rand_idx + 2))
+                if [ -n "$hex_byte" ]; then
+                    byte_val=$((0x$hex_byte))
+                    variation=$(( (byte_val % 41) - 20 ))
+                else
+                    variation=$(( ((row * 7 + col * 13) % 41) - 20 ))
+                fi
+            else
+                variation=$(( ((row * 7 + col * 13) % 41) - 20 ))
+            fi
+
+            new_val=$((base + variation))
+
+            # Format as +/- 0.XXXXXX
+            if [ $new_val -ge 0 ]; then
+                printf_val=$(printf "%06d" $((new_val * 1000)))
+                point="+0.$printf_val"
+            else
+                printf_val=$(printf "%06d" $(( -new_val * 1000)))
+                point="-0.$printf_val"
+            fi
+
+            if [ $count -eq $total_points ]; then
+                result="$result $point"
+            else
+                result="$result$point, "
+            fi
+            col=$((col + 1))
+        done
+        row=$((row + 1))
     done
     echo "$result"
 }
