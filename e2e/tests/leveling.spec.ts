@@ -403,6 +403,43 @@ test.describe('Leveling Page - Settings', () => {
     const updatedBedTempInput = page.locator('.settings-form input[type="number"]').nth(1);
     await expect(updatedBedTempInput).toHaveValue('65');
   });
+
+  test('should maintain separate settings per profile', async ({ page }) => {
+    const settingsForm = page.locator('.settings-form');
+    
+    // Get current profile's bed temp
+    const currentBedTempInput = settingsForm.locator('input[type="number"]').nth(1);
+    const currentBedTemp = await currentBedTempInput.inputValue();
+    
+    // Switch to Backup profile (ID 1)
+    const dropdown = page.locator('select').first();
+    await dropdown.selectOption('1');
+    await page.waitForTimeout(1000);
+    
+    // Change bed temp on Backup profile to a different value
+    const backupBedTemp = currentBedTemp === '60' ? '65' : '60';
+    const backupBedTempInput = settingsForm.locator('input[type="number"]').nth(1);
+    await backupBedTempInput.fill(backupBedTemp);
+    
+    // Save settings for Backup profile
+    const saveButton = settingsForm.locator('button:has-text("Save")');
+    await saveButton.click();
+    await expect(page.locator('text=/Settings updated|success/i')).toBeVisible({ timeout: 10000 });
+    
+    // Switch back to Current profile
+    await dropdown.selectOption('current');
+    await page.waitForTimeout(1000);
+    
+    // Verify Current profile still has its original bed temp (not Backup's value)
+    const currentBedTempAfterSwitch = settingsForm.locator('input[type="number"]').nth(1);
+    await expect(currentBedTempAfterSwitch).toHaveValue(currentBedTemp);
+    
+    // Switch back to Backup and verify it kept the changed value
+    await dropdown.selectOption('1');
+    await page.waitForTimeout(1000);
+    const backupBedTempAfterSwitch = settingsForm.locator('input[type="number"]').nth(1);
+    await expect(backupBedTempAfterSwitch).toHaveValue(backupBedTemp);
+  });
 });
 
 test.describe('Leveling Page - Bed Mesh Visualizer', () => {
