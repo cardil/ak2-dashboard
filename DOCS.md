@@ -6,7 +6,7 @@ Comprehensive guide to using the AK2 Dashboard features.
 
 - [Dashboard Overview](#dashboard-overview)
 - [Bed Mesh Leveling](#bed-mesh-leveling)
-- [Profiles System](#profiles-system)
+- [Profiles](#profiles)
 - [3D Mesh Visualizer](#3d-mesh-visualizer)
 - [System Tools](#system-tools)
 - [File Browser](#file-browser)
@@ -41,82 +41,75 @@ Live view from your USB camera (if connected).
 
 ## Bed Mesh Leveling
 
-The most powerful feature of the AK2 Dashboard is the advanced bed mesh leveling system.
+The Leveling page provides advanced bed mesh management with mesh averaging and profile support.
+
+### What the Printer Firmware Knows
+
+The printer firmware only knows two things:
+- `/user/printer.cfg` - Contains the active bed mesh and leveling settings
+- `/user/unmodifiable.cfg` - Read-only system configuration
+
+Everything else (slots, profiles, averaging) is managed by the dashboard as a layer on top.
 
 ### The Problem
 
-Stock firmware's bed leveling produces inconsistent results. The same probe point can measure differently each time:
-- First measurement: -0.09mm
-- Second measurement: -0.06mm
-- Third measurement: -0.11mm
-
-This inconsistency leads to poor first-layer adhesion and print failures.
+Stock firmware's bed leveling produces inconsistent results. The same probe point can measure differently each time (-0.09mm, then -0.06mm, then -0.11mm). This leads to poor first-layer adhesion.
 
 ### The Solution: Mesh Averaging
 
-The averaging system combines multiple leveling passes to produce a reliable, consistent mesh.
+Save multiple leveling passes as "slots", then apply the calculated average for a statistically superior mesh.
 
-### How It Works
+### Workflow
 
-1. **Run Auto-Level** - Perform bed leveling from your printer as usual
-2. **Save Slot** - The dashboard detects new mesh data and prompts you to save it as a "slot"
-3. **Repeat** - Run leveling several more times (5-6 recommended), saving each as a new slot
-4. **Calculate Average** - The system automatically computes the average of all slots
-5. **Apply** - Click "Set mesh average data" to write the averaged mesh to your printer.cfg
-6. **Reboot** - Restart the printer for changes to take effect
+1. **Run Auto-Level** from printer's physical menu
+2. **Save to slot** in the dashboard (the new mesh appears as "Active Mesh")
+3. **Repeat** leveling 5-6 times, saving each to a new slot
+4. **Activate the average** mesh when satisfied
+5. **Reboot** the printer for changes to take effect
+6. **Save as profile** to backup the configuration
 
-### The Math
+### Settings
 
-The algorithm is simple yet effective:
-```
-For each probe point:
-  Average = (Slot1 + Slot2 + Slot3 + ... + SlotN) / N
-```
+| Setting | Description | Notes |
+|---------|-------------|-------|
+| **Grid Size** | Probe point density (2×2 to 10×10) | K2 Pro max 6×6, K2 Plus/Max max 10×10. Changing deletes all slots. ⚠️ Increase by one point at a time to avoid firmware limitations. |
+| **Bed Temp** | Temperature during leveling | Match your most common print temperature |
+| **Precision** | Decimal precision for averaging | 0.01 = round to nearest 0.01mm |
 
-Each corresponding point from all saved slots is summed and divided by the number of slots, resulting in a statistically superior mesh that eliminates measurement noise.
+### Slots
 
-### Advanced Settings
+Slots store individual mesh measurements from each leveling pass. They are:
+- **Dashboard-only** - The printer firmware doesn't know about them
+- **Profile-specific** - Each profile (including Current) has its own isolated slots
+- **Numbered 1-99** - Automatically assigned or manually specified
 
-**Custom Grid Size**
-- K2 Pro: Default 5×5, max 6×6
-- K2 Plus/Max: Default 7×7, max 10×10
-- Increase grid density for more detailed mesh data
-- ⚠️ Increase by one point at a time to avoid firmware limitations
+## Profiles
 
-**Leveling Temperature**
-- Set custom bed temperature for leveling
-- Recommended to match your most common print temperature
-- Accounts for thermal expansion at printing temps
+Profiles let you save and restore complete leveling configurations for different scenarios (build surfaces, materials, backups). They are dashboard-only features - the printer firmware doesn't know about them. They are snapshots you can restore later.
 
-**Precision**
-- Set decimal precision for averaged results
-- 0.01mm precision: Values <0.005 round to 0.00, ≥0.005 round to 0.01
-- Experiment to find optimal settings for your printer
+**Current vs. Saved Profiles**
 
-### Slot Management
+| | Current | Saved Profile |
+|---|---------|---------------|
+| Location | `/user/printer.cfg` | `profiles/{id}/printer.cfg` |
+| Slots | `/user/webfs/data_slot_*.txt` | `profiles/{id}/slots/` |
+| Receives leveling data | ✓ Yes | ✗ No (snapshot only) |
+| Changes affect printer | ✓ Immediately | ✗ Not until applied |
 
-- **Save Slots** - Up to 99 slots can be saved
-- **View Specific Slot** - Enter slot number and click visualize
-- **Delete Slots** - Clear specific slots or all slots
-- **Automatic Numbering** - Slots are numbered automatically
+**Operations**
+- **Create:** Save As (💾) → New Profile → Enter name
+- **Rename/Delete:** Settings (⚙️) → Edit (✏️) or Delete (🗑️)
+- **Apply to Printer:** Select profile → Save As → Current → Confirm reboot
 
-### Visualization
+**What Profiles Store**
+- Grid size, bed temp, precision settings
+- Active mesh data
+- All saved slot measurements
 
-- **Current Mesh** - View the mesh currently in printer.cfg
-- **Average Mesh** - View the calculated average mesh
-- **Specific Slot** - View any saved slot in 3D
-- **Compare** - Compare current vs. average to see improvements
-
----
-
-## Profiles System
-
-🚧 **This feature is currently under reconstruction.** A new profiles system with isolated slot storage is being developed.
-
-The profiles system will allow you to save complete leveling configurations for different scenarios, such as:
-- Different build plates (PEI sheet, textured spring steel, glass plate)
-- Different materials with varying thermal expansion requirements
-- Custom configurations for specific use cases
+**Limitations**
+- Maximum 20 profiles, 99 slots per profile
+- Grid size changes delete all slots and require reboot
+- Profile names must be unique (case-insensitive)
 
 ---
 

@@ -66,7 +66,7 @@ test: compile test-only ## Run tests (runs also: init, lint, compile)
 
 build-only: $(FRONTEND_TARGET) ## Builds the artifacts
 
-dist: node_modules $(SOURCE_FILES) $(STATIC_FILES)
+dist: node_modules $(SOURCE_FILES) $(STATIC_FILES) ../DOCS.md
 	@echo "$(BLUE)➜ Building frontend...$(NC)"
 	rm -rf dist
 	npm run build
