@@ -681,14 +681,10 @@ void apply_precision(double *mesh, double precision) {
 // mesh_config[] = copy of the mesh as shown in the printer config file
 // mesh_values[] = parsed values
 // mesh_matrix[] = formatted matrix for use in the 3d visualizer
-int read_mesh_from_printer_config(void) {
-    const char *k2_cfg = NULL;
-
+int read_mesh_from_config_file(const char *config_path) {
     int result = 2;
 
-    int rr = detect_printer_defaults(NULL, &k2_cfg, NULL, NULL);
-
-    if (rr) {
+    if (config_path == NULL) {
         return 1;
     } else {
         FILE *file;
@@ -709,7 +705,7 @@ int read_mesh_from_printer_config(void) {
         z_offset = 0.0;
 
         // read the file line by line
-        file = fopen(k2_cfg, "r");
+        file = fopen(config_path, "r");
         if (file) {
             while (1) {
                 read = getline(&b, &len, file);
@@ -759,6 +755,16 @@ int read_mesh_from_printer_config(void) {
         }
     }
     return result;
+}
+
+// Wrapper that reads from the default printer config
+int read_mesh_from_printer_config(void) {
+    const char *k2_cfg = NULL;
+    int rr = detect_printer_defaults(NULL, &k2_cfg, NULL, NULL);
+    if (rr) {
+        return 1;
+    }
+    return read_mesh_from_config_file(k2_cfg);
 }
 
 char static_template_buffer[1024];

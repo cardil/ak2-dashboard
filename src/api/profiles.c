@@ -11,6 +11,7 @@
 
 // External variables and functions from request.c
 extern int read_mesh_from_printer_config(void);
+extern int read_mesh_from_config_file(const char *config_path);
 extern int mesh_grid;
 extern int bed_temp;
 extern double z_offset;
@@ -78,8 +79,40 @@ void handle_get_profile(struct REQUEST *req, const char *profile_id_str) {
     return;
   }
 
-  // Read current mesh data
-  read_mesh_from_printer_config();
+  // Read mesh data and precision from the appropriate config file
+  if (is_current) {
+    read_mesh_from_printer_config();
+
+    // Read precision from current parameters file
+    config_option_t current_params = read_config_file("/user/webfs/parameters.cfg");
+    if (current_params) {
+      char *precision_str = get_key_value(current_params, "precision", "0.01");
+      precision = atof(precision_str);
+      if ((precision < 0.0001) || (precision > 0.1)) {
+        precision = 0.01;
+      }
+    } else {
+      precision = 0.01; // Default if no parameters file
+    }
+  } else {
+    char profile_config[512];
+    snprintf(profile_config, sizeof(profile_config), "/user/webfs/profiles/%d/printer.cfg", profile_id);
+    read_mesh_from_config_file(profile_config);
+
+    // Read precision from profile's parameters file
+    char params_file[512];
+    snprintf(params_file, sizeof(params_file), "/user/webfs/profiles/%d/parameters.cfg", profile_id);
+    config_option_t profile_params = read_config_file(params_file);
+    if (profile_params) {
+      char *precision_str = get_key_value(profile_params, "precision", "0.01");
+      precision = atof(precision_str);
+      if ((precision < 0.0001) || (precision > 0.1)) {
+        precision = 0.01;
+      }
+    } else {
+      precision = 0.01; // Default if no parameters file
+    }
+  }
   trim_trailing_whitespace(mesh_config);
 
   int len = snprintf(api_response_buffer, sizeof(api_response_buffer),

@@ -273,13 +273,20 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
     }
   }
 
-  if (precision_str && is_current) {
+  if (precision_str) {
+    char params_file[512];
+    if (is_current) {
+      snprintf(params_file, sizeof(params_file), "/user/webfs/parameters.cfg");
+    } else {
+      snprintf(params_file, sizeof(params_file), "/user/webfs/profiles/%d/parameters.cfg", profile_id);
+    }
+
     if (!leveling_config) {
-      leveling_config = read_config_file("/user/webfs/parameters.cfg");
+      leveling_config = read_config_file(params_file);
     }
     leveling_config = set_key_value(leveling_config, "precision", precision_str);
-    write_config_file("/user/webfs/parameters.cfg", leveling_config);
-    LOG( "Leveling precision set to %s\n", precision_str);
+    write_config_file(params_file, leveling_config);
+    LOG( "Leveling precision set to %s in %s\n", precision_str, params_file);
   }
 
   // Log settings update
