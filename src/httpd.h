@@ -233,6 +233,11 @@ extern int flushlog;
     } \
 } while(0)
 
+/* System command execution */
+#define SYSTEM_BUFFER_MAX 1024
+extern char system_buffer[SYSTEM_BUFFER_MAX];
+extern int system_with_output(const char *cmd, int line_number);
+
 /* -------------------------------------------------------------- */
 
 #define INIT_LOCK(mutex)       /* nothing */

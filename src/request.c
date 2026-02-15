@@ -2393,12 +2393,15 @@ void parse_request(struct REQUEST *req) {
     req->cache_turn_off = 'N';
 
     // process the custom pages
-    if (strncmp(req->path, "/api/profiles", 13) == 0) {
-        handle_api_request(req, filename);
-        return; // API request handled, don't continue with file serving
-    } else {
-        process_custom_pages(filename, req);
+    if (strncmp(req->path, "/api/", 5) == 0) {
+        // Check if it's a profiles or security API route
+        if (strncmp(req->path, "/api/profiles", 13) == 0 ||
+            strncmp(req->path, "/api/security", 13) == 0) {
+            handle_api_request(req, filename);
+            return; // API request handled, don't continue with file serving
+        }
     }
+    process_custom_pages(filename, req);
 
     h = filename + len - 1;
     if (*h == '/') {

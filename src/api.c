@@ -171,10 +171,11 @@ void handle_post_security_password(struct REQUEST *req) {
 
   // Use chpasswd to change root password
   char command[512];
-  snprintf(command, sizeof(command), "echo 'root:%s' | chpasswd", password);
-  int result = system(command);
+  snprintf(command, sizeof(command), "echo 'root:%s' | /usr/sbin/chpasswd 2>&1", password);
+  system_with_output(command, 1);
 
-  if (result == 0) {
+  // chpasswd outputs "chpasswd: password for 'root' changed" on success
+  if (strstr(system_buffer, "changed") != NULL) {
     LOG("Root password changed successfully\n");
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"success\", \"message\": \"Root password changed successfully\"}");
@@ -183,7 +184,7 @@ void handle_post_security_password(struct REQUEST *req) {
     req->mime = "application/json";
     mkheader(req, 200);
   } else {
-    LOG("Failed to change root password (exit code: %d)\n", result);
+    LOG("Failed to change root password: %s\n", system_buffer);
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Failed to change password\"}");
     req->body = api_response_buffer;
