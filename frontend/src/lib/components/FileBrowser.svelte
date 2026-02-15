@@ -157,6 +157,17 @@
     {/if}
   </div>
   <ul class="file-list">
+    {#if $fileBrowserStore.length === 0 && displayPath === "/"}
+      <div class="empty-message">
+        <p><strong>File browser is empty</strong></p>
+        <p class="hint">
+          If directory listing is disabled with the <code>-j</code> flag in
+          webfsd configuration, the file browser will not be functional. Remove
+          the <code>-j</code> flag from
+          <code>/etc/webfsd/webfsd.conf</code> to enable file browsing.
+        </p>
+      </div>
+    {/if}
     {#if canGoUp}
       <div class="file-item">
         <button
@@ -282,6 +293,10 @@
     align-items: center;
   }
 
+  .file-item {
+    border-radius: 8px;
+  }
+
   .file-item:hover {
     background-color: rgba(0, 0, 0, 0.1);
   }
@@ -303,10 +318,11 @@
     text-align: left;
     gap: 0.5rem;
     justify-content: flex-start;
+    border-radius: 8px;
   }
 
   .directory-btn:hover {
-    background-color: var(--card-background-color);
+    background-color: transparent;
   }
 
   .go-up-btn {
@@ -419,5 +435,30 @@
   .path-current {
     color: var(--text-color);
     font-weight: bold;
+  }
+
+  .empty-message {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-color);
+  }
+
+  .empty-message p {
+    margin: 0.5rem 0;
+  }
+
+  .empty-message .hint {
+    font-size: 0.9em;
+    opacity: 0.8;
+    max-width: 600px;
+    margin: 1rem auto;
+    line-height: 1.5;
+  }
+
+  .empty-message code {
+    background-color: var(--card-border-color);
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-family: monospace;
   }
 </style>

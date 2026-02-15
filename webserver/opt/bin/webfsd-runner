@@ -1,0 +1,128 @@
+#!/bin/sh
+# Webfsd startup wrapper script
+# Provides unified startup for webfsd with configuration file support
+# Used by both rc.local and deployment scripts
+#
+# Configuration:
+#   /etc/webfsd/webfsd.conf       - main config file
+#   /etc/webfsd/webfsd.conf.d/*.conf - drop-in overrides (sorted alphabetically)
+#
+# Config file format:
+#   One option per line. Comment/uncomment to enable/disable.
+#   -flag           (boolean flag)
+#   -option value   (option with argument)
+#   !-flag          (disable/remove a flag previously set)
+#
+# Drop-in files can override options from main config:
+#   - Same option in drop-in replaces earlier value
+#   - !-flag removes the flag entirely
+#
+# Example:
+#   -p 80
+#   -r /mnt/UDISK/webfs
+#   -j
+#   # -d
+
+set -e
+
+# Configuration locations
+CONFIG_DIR="${WEBFSD_CONFIG_DIR:-/etc/webfsd}"
+CONFIG_FILE="${CONFIG_DIR}/webfsd.conf"
+CONFIG_DROP_IN_DIR="${CONFIG_DIR}/webfsd.conf.d"
+
+# Defaults
+WEBFSD_BIN="${WEBFSD_BIN:-/opt/bin/webfsd}"
+
+# Temp file to accumulate options (flag|value format, one per line)
+OPT_FILE=$(mktemp)
+trap 'rm -f "$OPT_FILE"' EXIT
+
+# Function to parse a config file
+# Options are accumulated in OPT_FILE, later values override earlier
+parse_config() {
+    config_file="$1"
+    [ -f "$config_file" ] || return 0
+    
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Trim leading/trailing whitespace
+        line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        
+        # Skip empty lines and comments
+        case "$line" in
+            ''|\#*) continue ;;
+        esac
+        
+        # Handle special options
+        case "$line" in
+            !-*)
+                # Disable/remove a flag: !-j removes -j
+                flag="${line#!}"
+                # Extract just the flag letter(s)
+                flag_name=$(echo "$flag" | sed 's/^\(-[a-zA-Z]*\).*/\1/')
+                # Remove from options file
+                sed -i "/^${flag_name}|/d" "$OPT_FILE"
+                ;;
+            -*)
+                # Webfsd option - extract flag and value, store/override
+                flag_name=$(echo "$line" | sed 's/^\(-[a-zA-Z]*\).*/\1/')
+                value=$(echo "$line" | sed 's/^-[a-zA-Z]* *//')
+                # Remove existing entry for this flag
+                sed -i "/^${flag_name}|/d" "$OPT_FILE"
+                # Add new entry
+                echo "${flag_name}|${value}" >> "$OPT_FILE"
+                ;;
+        esac
+    done < "$config_file"
+}
+
+# Read main configuration file
+parse_config "$CONFIG_FILE"
+
+# Read drop-in configuration files (sorted alphabetically)
+if [ -d "$CONFIG_DROP_IN_DIR" ]; then
+    for drop_in in "$CONFIG_DROP_IN_DIR"/*.conf; do
+        [ -f "$drop_in" ] && parse_config "$drop_in"
+    done
+fi
+
+# Build final args from options file
+WEBFSD_ARGS=""
+while IFS='|' read -r flag value; do
+    if [ -n "$value" ]; then
+        WEBFSD_ARGS="$WEBFSD_ARGS $flag $value"
+    else
+        WEBFSD_ARGS="$WEBFSD_ARGS $flag"
+    fi
+done < "$OPT_FILE"
+
+# Trim leading space from args
+WEBFSD_ARGS=$(echo "$WEBFSD_ARGS" | sed 's/^[[:space:]]*//')
+
+# Check if webfsd binary exists
+if [ ! -x "$WEBFSD_BIN" ]; then
+    echo "Error: webfsd binary not found at $WEBFSD_BIN" >&2
+    exit 1
+fi
+
+# Stop existing webfsd if running
+if pidof webfsd > /dev/null 2>&1; then
+    echo "Stopping existing webfsd..."
+    killall webfsd 2>/dev/null || true
+    # Wait for graceful termination
+    i=0
+    while pidof webfsd > /dev/null 2>&1 && [ $i -lt 5 ]; do
+        sleep 1
+        i=$((i + 1))
+    done
+    # Force kill if still running
+    if pidof webfsd > /dev/null 2>&1; then
+        killall -9 webfsd 2>/dev/null || true
+        sleep 1
+    fi
+fi
+
+# Clean up temp file before exec (trap won't run after exec replaces process)
+rm -f "$OPT_FILE"
+
+# Start webfsd - exec replaces this process
+exec $WEBFSD_BIN $WEBFSD_ARGS

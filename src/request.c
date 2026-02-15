@@ -871,15 +871,18 @@ int control_api(config_option_t query) {
     int result = -1;
     char *action = get_key_value(query, "action", "unknown");
     if (!strcmp(action, "reboot")) {
+        fprintf(stderr, "System reboot requested\n");
         system_with_output("reboot", 1);
         result = 1;
     }
     if (!strcmp(action, "poweroff")) {
+        fprintf(stderr, "System poweroff requested\n");
         system_with_output("poweroff", 1);
         result = 1;
     }
     if (!strcmp(action, "log_clear")) {
         system("cat /dev/null > /mnt/UDISK/log");
+        fprintf(stderr, "Log cleared\n");
         result = 1;
     }
     if (!strcmp(action, "ssh_start")) {
@@ -887,6 +890,7 @@ int control_api(config_option_t query) {
         result = 0;
         if (ssh == 1) {
             system_with_output("/opt/etc/init.d/S51dropbear start 2>&1", 1);
+            fprintf(stderr, "SSH service started\n");
             result = 2;
         } else {
             if (ssh == 2)
@@ -898,6 +902,7 @@ int control_api(config_option_t query) {
         result = 0;
         if (ssh == 2) {
             system_with_output("/opt/etc/init.d/S51dropbear stop 2>&1", 1);
+            fprintf(stderr, "SSH service stopped\n");
             result = 1;
         } else {
             if (ssh == 1)
@@ -1260,6 +1265,8 @@ int update_printer_config_file(const char *config_file, const char *parameter_na
             remove(config_file);
             custom_copy_file("/user/printer-config.tmp", config_file, "wb", NULL);
             remove("/user/printer-config.tmp");
+            // Log config modification (always, not just debug)
+            fprintf(stderr, "Config updated: %s [%s]\n", config_file, parameter_name);
             return 0;
         } else {
             fclose(ifile);
@@ -1513,6 +1520,7 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
         if (!strcmp(action, "log_clear")) {
             // log clear
             system("cat /dev/null > /mnt/UDISK/log");
+            fprintf(stderr, "Log cleared\n");
             response_code = 8;
         }
 
@@ -1529,6 +1537,7 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
             // ssh start
             if (file_exists("/opt/etc/init.d/S51dropbear")) {
                 system_with_output("/opt/etc/init.d/S51dropbear start 2>&1", 1);
+                fprintf(stderr, "SSH service started\n");
                 response_code = 8;
             } else {
                 error_code = 13;
@@ -1538,6 +1547,7 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
             // ssh stop
             if (file_exists("/opt/etc/init.d/S51dropbear")) {
                 system_with_output("/opt/etc/init.d/S51dropbear stop 2>&1", 1);
+                fprintf(stderr, "SSH service stopped\n");
                 response_code = 8;
             } else {
                 error_code = 13;

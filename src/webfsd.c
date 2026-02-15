@@ -52,6 +52,7 @@ FILE *logfh = NULL;
 char *userpass = NULL;
 char *userdir = NULL;
 int flushlog = 0;
+int accesslog = 0;
 int do_chroot = 0;
 int usesyslog = 0;
 int have_tty = 1;
@@ -98,6 +99,7 @@ usage(char *name) {
             "  -c n     set max. allowed connections        [%i]\n"
             "  -O CORS  set CORS header                     [%s]\n"
             "  -a n     set max. cached dirs                [%i]\n"
+            "  -A       enable access logging               [%s]\n"
             "  -j       disable directory listings          [%s]\n"
             "  -p port  use tcp-port >port<                 [%s]\n"
             "  -r dir   document root is >dir<              [%s]\n"
@@ -107,7 +109,7 @@ usage(char *name) {
             "  -N host  same as above + UseCanonicalName\n"
             "  -i ip    bind to IP-address >ip<             [%s]\n"
             "  -v       enable virtual hosts                [%s]\n"
-            "  -l log   write access log to file >log<      [%s]\n"
+            "  -l log   write log to file >log<             [%s]\n"
             "  -L log   same as above + flush every line\n"
             "  -m file  read mime types from >file<         [%s]\n"
             "  -k file  use >file< as pidfile               [%s]\n"
@@ -124,6 +126,7 @@ usage(char *name) {
             timeout, max_conn,
             cors ? cors : "none",
             max_dircache,
+            accesslog ? "on" : "off",
             no_listing ? "on" : "off",
             listen_port, doc_root,
             indexhtml ? indexhtml : "index.html",
@@ -287,6 +290,9 @@ fix_ug(void) {
 static void
 access_log(struct REQUEST *req, time_t now) {
     char timestamp[32];
+
+    if (!accesslog)
+        return;
 
     DO_LOCK(lock_logfile);
     if (NULL == logfh) {
@@ -692,10 +698,13 @@ int main(int argc, char *argv[]) {
     /* parse options */
     for (;;) {
         if (-1 == (c = getopt(argc, argv,
-                              "hvsdF46jS"
+                              "hvsdF46jSA"
                               "O:r:R:f:p:n:N:i:t:c:a:u:g:l:L:m:y:b:k:e:x:C:P:~:")))
             break;
         switch (c) {
+            case 'A':
+                accesslog++;
+                break;
             case 'h':
                 usage(argv[0]);
                 break;
@@ -922,7 +931,17 @@ int main(int argc, char *argv[]) {
             case 0:
                 close(0);
                 close(1);
-                close(2);
+                /* Redirect stderr to log file if logging is enabled */
+                if (logfile && logfh) {
+                    int logfd = fileno(logfh);
+                    if (logfd >= 0) {
+                        dup2(logfd, 2);
+                    } else {
+                        close(2);
+                    }
+                } else {
+                    close(2);
+                }
                 setsid();
                 have_tty = 0;
                 break;

@@ -72,17 +72,34 @@ echo "${TICK} Package uploaded"
 # Install and restart webserver
 echo "${INFO} Installing and restarting webserver..."
 
-# Allow custom webfsd command (e.g., for debug mode with logging)
-# Default: /opt/bin/webfsd -p ${WEBFSD_PORT}
-WEBFSD_CMD="${WEBFSD_CMD:-/opt/bin/webfsd -p ${WEBFSD_PORT}}"
+# Handle debug mode via WEBFSD_DEBUG env var
+WEBFSD_DEBUG="${WEBFSD_DEBUG:-}"
 
 if ! ${SSH_CMD} -p "${PRINTER_PORT}" "${PRINTER_USER}@${PRINTER_IP}" "
     cd / &&
-    killall webfsd 2>/dev/null || true &&
     rm -rf /opt/webfs &&
     unzip -o webserver.zip &&
-    ${WEBFSD_CMD} &&
-    rm -f webserver.zip
+    rm -f webserver.zip &&
+    
+    # Update port in config if different from default
+    if ! grep -q '^-p ${WEBFSD_PORT}\$' /etc/webfsd/webfsd.conf 2>/dev/null; then
+        sed -i 's/^-p [0-9]*\$/-p ${WEBFSD_PORT}/' /etc/webfsd/webfsd.conf
+    fi &&
+    
+    # Enable/disable debug mode in config
+    if [ '${WEBFSD_DEBUG}' = '1' ]; then
+        # Uncomment -d line or add if not present
+        if grep -q '^# *-d\$' /etc/webfsd/webfsd.conf; then
+            sed -i 's/^# *-d\$/-d/' /etc/webfsd/webfsd.conf
+        elif ! grep -q '^-d\$' /etc/webfsd/webfsd.conf; then
+            echo '-d' >> /etc/webfsd/webfsd.conf
+        fi
+    else
+        # Comment out -d line if present
+        sed -i 's/^-d\$/# -d/' /etc/webfsd/webfsd.conf 2>/dev/null || true
+    fi &&
+    
+    /opt/bin/webfsd-runner
 "; then
     echo "${CROSS} Deployment failed. Check prerequisites."
     exit 1

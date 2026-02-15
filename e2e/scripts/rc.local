@@ -8,8 +8,8 @@ if [ -x /opt/scripts/gen-bed-mesh.sh ] && ! grep -q "^points" /user/printer.cfg;
     echo "Generated bed mesh points"
 fi
 
-# Only start if webfsd binary exists and not already running
-if [ -x /opt/bin/webfsd ] && ! pidof webfsd > /dev/null; then
-    /opt/bin/webfsd -p 80
+# Start webfsd using wrapper script
+if [ -x /opt/bin/webfsd-runner ]; then
+    /opt/bin/webfsd-runner &
     echo "webfsd started"
 fi

@@ -8,6 +8,13 @@
   if (browser) {
     effectiveTheme.subscribe((value) => {
       document.body.dataset.theme = value
+      // Update color-scheme meta tag to match current theme for Dark Reader detection
+      const metaColorScheme = document.querySelector(
+        'meta[name="color-scheme"]',
+      )
+      if (metaColorScheme) {
+        metaColorScheme.setAttribute("content", value)
+      }
     })
   }
 
@@ -22,7 +29,7 @@
 
 <svelte:head>
   <title>AK2 Dashboard</title>
-  <meta name="color-scheme" content="light dark" />
+  <meta name="color-scheme" content={$effectiveTheme} />
   <link rel="icon" href={favicon} />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link

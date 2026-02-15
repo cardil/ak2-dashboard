@@ -119,6 +119,24 @@ void handle_api_request(struct REQUEST *req, char *filename) {
     }
   }
 
+  // POST /api/security/password
+  if (strcmp(req->path, "/api/security/password") == 0 && strcmp(req->type, "POST") == 0) {
+    handle_post_security_password(req);
+    return;
+  }
+
+  // POST /api/system/reboot
+  if (strcmp(req->path, "/api/system/reboot") == 0 && strcmp(req->type, "POST") == 0) {
+    handle_post_system_reboot(req);
+    return;
+  }
+
+  // POST /api/system/ssh
+  if (strcmp(req->path, "/api/system/ssh") == 0 && strcmp(req->type, "POST") == 0) {
+    handle_post_system_ssh(req);
+    return;
+  }
+
   // Fallback for unknown endpoints
   snprintf(api_response_buffer, sizeof(api_response_buffer),
           "{\"status\": \"error\", \"message\": \"API endpoint not found\"}");
@@ -126,4 +144,113 @@ void handle_api_request(struct REQUEST *req, char *filename) {
   req->lbody = strlen(api_response_buffer);
   req->mime = "application/json";
   mkheader(req, 404);
+}
+
+// POST /api/security/password - Change root password
+void handle_post_security_password(struct REQUEST *req) {
+  if (req->req_body == NULL) {
+    snprintf(api_response_buffer, sizeof(api_response_buffer),
+            "{\"status\": \"error\", \"message\": \"Missing request body.\"}");
+    req->body = api_response_buffer;
+    req->lbody = strlen(api_response_buffer);
+    req->mime = "application/json";
+    mkheader(req, 400);
+    return;
+  }
+
+  char *password = get_json_value(req->req_body, "\"password\"");
+  if (!password || strlen(password) == 0) {
+    snprintf(api_response_buffer, sizeof(api_response_buffer),
+            "{\"status\": \"error\", \"message\": \"Invalid JSON payload. Missing 'password'.\"}");
+    req->body = api_response_buffer;
+    req->lbody = strlen(api_response_buffer);
+    req->mime = "application/json";
+    mkheader(req, 400);
+    return;
+  }
+
+  // Use chpasswd to change root password
+  char command[512];
+  snprintf(command, sizeof(command), "echo 'root:%s' | chpasswd", password);
+  int result = system(command);
+
+  if (result == 0) {
+    fprintf(stderr, "Root password changed successfully\n");
+    snprintf(api_response_buffer, sizeof(api_response_buffer),
+            "{\"status\": \"success\", \"message\": \"Root password changed successfully\"}");
+    req->body = api_response_buffer;
+    req->lbody = strlen(api_response_buffer);
+    req->mime = "application/json";
+    mkheader(req, 200);
+  } else {
+    fprintf(stderr, "Failed to change root password (exit code: %d)\n", result);
+    snprintf(api_response_buffer, sizeof(api_response_buffer),
+            "{\"status\": \"error\", \"message\": \"Failed to change password\"}");
+    req->body = api_response_buffer;
+    req->lbody = strlen(api_response_buffer);
+    req->mime = "application/json";
+    mkheader(req, 500);
+  }
+}
+
+// POST /api/system/reboot - Reboot the system
+void handle_post_system_reboot(struct REQUEST *req) {
+  fprintf(stderr, "System reboot requested\n");
+  system("sync && reboot &");
+
+  snprintf(api_response_buffer, sizeof(api_response_buffer),
+          "{\"status\": \"success\", \"message\": \"System is rebooting\"}");
+  req->body = api_response_buffer;
+  req->lbody = strlen(api_response_buffer);
+  req->mime = "application/json";
+  mkheader(req, 200);
+}
+
+// POST /api/system/ssh - Start/stop SSH service
+void handle_post_system_ssh(struct REQUEST *req) {
+  if (req->req_body == NULL) {
+    snprintf(api_response_buffer, sizeof(api_response_buffer),
+            "{\"status\": \"error\", \"message\": \"Missing request body.\"}");
+    req->body = api_response_buffer;
+    req->lbody = strlen(api_response_buffer);
+    req->mime = "application/json";
+    mkheader(req, 400);
+    return;
+  }
+
+  char *action = get_json_value(req->req_body, "\"action\"");
+  if (!action) {
+    snprintf(api_response_buffer, sizeof(api_response_buffer),
+            "{\"status\": \"error\", \"message\": \"Invalid JSON payload. Missing 'action'.\"}");
+    req->body = api_response_buffer;
+    req->lbody = strlen(api_response_buffer);
+    req->mime = "application/json";
+    mkheader(req, 400);
+    return;
+  }
+
+  if (strcmp(action, "start") == 0) {
+    system("/opt/etc/init.d/S51dropbear start 2>&1");
+    fprintf(stderr, "SSH service started\n");
+    snprintf(api_response_buffer, sizeof(api_response_buffer),
+            "{\"status\": \"success\", \"message\": \"SSH service started\"}");
+  } else if (strcmp(action, "stop") == 0) {
+    system("/opt/etc/init.d/S51dropbear stop 2>&1");
+    fprintf(stderr, "SSH service stopped\n");
+    snprintf(api_response_buffer, sizeof(api_response_buffer),
+            "{\"status\": \"success\", \"message\": \"SSH service stopped\"}");
+  } else {
+    snprintf(api_response_buffer, sizeof(api_response_buffer),
+            "{\"status\": \"error\", \"message\": \"Invalid action. Use 'start' or 'stop'.\"}");
+    req->body = api_response_buffer;
+    req->lbody = strlen(api_response_buffer);
+    req->mime = "application/json";
+    mkheader(req, 400);
+    return;
+  }
+
+  req->body = api_response_buffer;
+  req->lbody = strlen(api_response_buffer);
+  req->mime = "application/json";
+  mkheader(req, 200);
 }

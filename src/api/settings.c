@@ -279,9 +279,12 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
     }
     leveling_config = set_key_value(leveling_config, "precision", precision_str);
     write_config_file("/user/webfs/parameters.cfg", leveling_config);
+    fprintf(stderr, "Leveling precision set to %s\n", precision_str);
   }
 
+  // Log settings update
   if (is_current) {
+    fprintf(stderr, "Settings updated (grid_changed=%s)\n", grid_size_changed ? "yes" : "no");
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"success\", \"message\": \"Settings updated. Please reboot for changes to take effect.\", \"grid_size_changed\": %s}",
             grid_size_changed ? "true" : "false");

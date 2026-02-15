@@ -19,13 +19,25 @@
   async function handlePasswordChange() {
     if (passwordsMatch) {
       try {
-        // TODO: Call API to change password
-        // const response = await fetch("/api/change-password", { ... })
-        // For now, just show a placeholder toast
-        toast.success("Root password changed successfully")
-        newPassword = ""
-        confirmPassword = ""
+        const response = await fetch("/api/security/password", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ password: newPassword }),
+        })
+
+        const data = await response.json()
+
+        if (response.ok && data.status === "success") {
+          toast.success("Root password changed successfully")
+          newPassword = ""
+          confirmPassword = ""
+        } else {
+          toast.error(data.message || "Failed to change root password")
+        }
       } catch (error) {
+        console.error("Error changing password:", error)
         toast.error("Failed to change root password")
       }
     }

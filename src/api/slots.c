@@ -50,6 +50,12 @@ void handle_put_profile_slot(struct REQUEST *req, const char *profile_id_str, in
       }
 
       if (custom_copy_file(NULL, fn_buf, "wb", mesh_data) == 0) {
+        // Log slot save
+        if (is_current) {
+          fprintf(stderr, "Mesh saved to slot %d\n", slot_id);
+        } else {
+          fprintf(stderr, "Mesh saved to profile %d slot %d\n", profile_id, slot_id);
+        }
         snprintf(api_response_buffer, sizeof(api_response_buffer),
                 "{\"status\": \"success\", \"message\": \"Mesh saved to slot %d.\"}", slot_id);
         status_code = 200;
@@ -97,6 +103,12 @@ void handle_delete_profile_slot(struct REQUEST *req, const char *profile_id_str,
     }
 
     if (remove(fn_buf) == 0) {
+      // Log slot deletion
+      if (is_current) {
+        fprintf(stderr, "Mesh slot %d deleted\n", slot_id);
+      } else {
+        fprintf(stderr, "Profile %d mesh slot %d deleted\n", profile_id, slot_id);
+      }
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"success\", \"message\": \"Mesh slot %d deleted.\"}", slot_id);
       status_code = 200;

@@ -17,6 +17,7 @@ RUN mkdir -p /user \
     && mkdir -p /opt/bin \
     && mkdir -p /opt/etc/init.d \
     && mkdir -p /opt/scripts \
+    && mkdir -p /etc/webfsd/webfsd.conf.d \
     && chmod 755 /user /mnt /opt \
     && chmod 755 /mnt/UDISK
 
@@ -52,6 +53,9 @@ COPY e2e/scripts/reboot /sbin/reboot
 COPY e2e/scripts/poweroff /sbin/poweroff
 COPY e2e/scripts/supervisord.conf /etc/supervisord.conf
 COPY e2e/scripts/gen-bed-mesh.sh /opt/scripts/gen-bed-mesh.sh
+
+# Copy E2E webfsd override (base config comes from webserver.zip during deploy)
+COPY e2e/config/webfsd/webfsd.conf.d/99-e2e.conf /etc/webfsd/webfsd.conf.d/99-e2e.conf
 
 # Make scripts executable
 RUN chmod +x /opt/etc/init.d/S51dropbear \

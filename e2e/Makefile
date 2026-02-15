@@ -61,20 +61,12 @@ down: ## Stop and remove the E2E testbed container
 	@echo "$(TICK) E2E Testbed stopped"
 	@echo ""
 
-# Webfsd command for E2E
-# Set E2E_DEBUG=1 to enable debug mode with verbose logging
-ifdef E2E_DEBUG
-E2E_WEBFSD_CMD ?= nohup /opt/bin/webfsd -d -p 80 > /mnt/UDISK/log 2>&1 & sleep 1
-else
-E2E_WEBFSD_CMD ?= nohup /opt/bin/webfsd -p 80 >> /mnt/UDISK/log 2>&1 & sleep 1
-endif
-
 deploy: ## Deploy to the E2E testbed (builds first). Use E2E_DEBUG=1 for debug mode
 	@echo ""
 	@echo "$(BLUE)➜ Deploying to E2E Testbed...$(NC)"
 	@$(MAKE) -C $(ROOT_DIR) deploy PRINTER_IP=localhost \
 		PRINTER_PORT=$(E2E_SSH_PORT) PRINTER_USER=root WEBFSD_PORT=80 \
-		PRINTER_PASSWORD=toor WEBFSD_CMD="$(E2E_WEBFSD_CMD)"
+		PRINTER_PASSWORD=toor WEBFSD_DEBUG=$(E2E_DEBUG)
 
 gen-mesh: ## Generate bed mesh points in testbed (simulates leveling)
 	@echo ""
