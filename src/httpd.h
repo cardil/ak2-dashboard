@@ -217,6 +217,23 @@ char *get_key_value(config_option_t conf_opt, char *key, char *def_value);
 config_option_t read_config_file_from_get_request(char *parameters);
 
 /* -------------------------------------------------------------- */
+/* Logging */
+
+extern FILE *logfh;
+extern int flushlog;
+
+/* Log to file if available, otherwise to stderr */
+/* Always flush for regular/debug logs (not access logs) */
+#define LOG(fmt, ...) do { \
+    if (logfh) { \
+        fprintf(logfh, fmt, ##__VA_ARGS__); \
+        fflush(logfh); \
+    } else { \
+        fprintf(stderr, fmt, ##__VA_ARGS__); \
+    } \
+} while(0)
+
+/* -------------------------------------------------------------- */
 
 #define INIT_LOCK(mutex)       /* nothing */
 #define FREE_LOCK(mutex)       /* nothing */

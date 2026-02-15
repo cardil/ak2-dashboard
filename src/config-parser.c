@@ -21,7 +21,7 @@ config_option_t read_config_file(char *path) {
 
     if ((fp = fopen(path, "r")) == NULL) {
         if (debug)
-            fprintf(stderr, "Error: cannot read the config file: %s\n", path);
+            LOG( "Error: cannot read the config file: %s\n", path);
         return NULL;
     }
 
@@ -63,7 +63,7 @@ int write_config_file(char *path, config_option_t conf_opt) {
 
     if ((fp = fopen(path, "w")) == NULL) {
         if (debug)
-            fprintf(stderr, "Error: cannot write the config file\n");
+            LOG( "Error: cannot write the config file\n");
         return 1;
     }
 

@@ -130,7 +130,7 @@ void YUY2_to_RGB(const uint8_t *yuy2_data, uint8_t *rgb_data, int width, int hei
 
 static void v_errno_print(const char *s) {
     if (debug)
-        fprintf(stderr, "%s error %d, %s\n", s, errno, strerror(errno));
+        LOG( "%s error %d, %s\n", s, errno, strerror(errno));
 }
 
 static int v_xioctl(int fh, int request, void *arg) {
@@ -312,7 +312,7 @@ static int v_mainloop(const char *filename, int v_frame_count) {
 
             if (0 == r) {
                 if (debug)
-                    fprintf(stderr, "select timeout\n");
+                    LOG( "select timeout\n");
                 return -1;
             }
 
@@ -434,7 +434,7 @@ static int v_init_read(unsigned int v_buffer_size) {
 
     if (!v_buffers) {
         if (debug)
-            fprintf(stderr, "Out of memory\n");
+            LOG( "Out of memory\n");
         return -1;
     }
 
@@ -443,7 +443,7 @@ static int v_init_read(unsigned int v_buffer_size) {
 
     if (!v_buffers[0].start) {
         if (debug)
-            fprintf(stderr, "Out of memory\n");
+            LOG( "Out of memory\n");
         return -1;
     }
     return 0;
@@ -461,7 +461,7 @@ static int v_init_mmap(void) {
     if (-1 == v_xioctl(v_fd, VIDIOC_REQBUFS, &req)) {
         if (EINVAL == errno) {
             if (debug)
-                fprintf(stderr,
+                LOG(
                         "%s does not support "
                         "memory mapping\n",
                         v_dev_name);
@@ -474,7 +474,7 @@ static int v_init_mmap(void) {
 
     if (req.count < 2) {
         if (debug)
-            fprintf(stderr, "Insufficient buffer memory on %s\n",
+            LOG( "Insufficient buffer memory on %s\n",
                     v_dev_name);
         return -1;
     }
@@ -483,7 +483,7 @@ static int v_init_mmap(void) {
 
     if (!v_buffers) {
         if (debug)
-            fprintf(stderr, "Out of memory\n");
+            LOG( "Out of memory\n");
         return -1;
     }
 
@@ -529,7 +529,7 @@ static int v_init_userp(unsigned int v_buffer_size) {
     if (-1 == v_xioctl(v_fd, VIDIOC_REQBUFS, &req)) {
         if (EINVAL == errno) {
             if (debug)
-                fprintf(stderr,
+                LOG(
                         "%s does not support "
                         "user pointer i/o\n",
                         v_dev_name);
@@ -544,7 +544,7 @@ static int v_init_userp(unsigned int v_buffer_size) {
 
     if (!v_buffers) {
         if (debug)
-            fprintf(stderr, "Out of memory\n");
+            LOG( "Out of memory\n");
         return -1;
     }
 
@@ -554,7 +554,7 @@ static int v_init_userp(unsigned int v_buffer_size) {
 
         if (!v_buffers[n_buffers].start) {
             if (debug)
-                fprintf(stderr, "Out of memory\n");
+                LOG( "Out of memory\n");
             return -1;
         }
     }
@@ -571,7 +571,7 @@ static int v_init_device(void) {
     if (-1 == v_xioctl(v_fd, VIDIOC_QUERYCAP, &cap)) {
         if (EINVAL == errno) {
             if (debug)
-                fprintf(stderr, "%s is no V4L2 device\n", v_dev_name);
+                LOG( "%s is no V4L2 device\n", v_dev_name);
             return -1;
         } else {
             v_errno_print("VIDIOC_QUERYCAP");
@@ -581,7 +581,7 @@ static int v_init_device(void) {
 
     if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
         if (debug)
-            fprintf(stderr, "%s is no video capture device\n", v_dev_name);
+            LOG( "%s is no video capture device\n", v_dev_name);
         return -1;
     }
 
@@ -589,7 +589,7 @@ static int v_init_device(void) {
         case IO_METHOD_READ:
             if (!(cap.capabilities & V4L2_CAP_READWRITE)) {
                 if (debug)
-                    fprintf(stderr, "%s does not support read i/o\n", v_dev_name);
+                    LOG( "%s does not support read i/o\n", v_dev_name);
                 return -1;
             }
             break;
@@ -598,7 +598,7 @@ static int v_init_device(void) {
         case IO_METHOD_USERPTR:
             if (!(cap.capabilities & V4L2_CAP_STREAMING)) {
                 if (debug)
-                    fprintf(stderr, "%s does not support streaming i/o\n", v_dev_name);
+                    LOG( "%s does not support streaming i/o\n", v_dev_name);
                 return -1;
             }
             break;
@@ -693,13 +693,13 @@ static int v_open_device(void) {
 
     if (-1 == stat(v_dev_name, &st)) {
         if (debug)
-            fprintf(stderr, "Cannot identify '%s': %d, %s\n", v_dev_name, errno, strerror(errno));
+            LOG( "Cannot identify '%s': %d, %s\n", v_dev_name, errno, strerror(errno));
         return -1;
     }
 
     if (!S_ISCHR(st.st_mode)) {
         if (debug)
-            fprintf(stderr, "%s is no device\n", v_dev_name);
+            LOG( "%s is no device\n", v_dev_name);
         return -1;
     }
 
@@ -707,7 +707,7 @@ static int v_open_device(void) {
 
     if (-1 == v_fd) {
         if (debug)
-            fprintf(stderr, "Cannot open '%s': %d, %s\n", v_dev_name, errno, strerror(errno));
+            LOG( "Cannot open '%s': %d, %s\n", v_dev_name, errno, strerror(errno));
         return -1;
     }
     return 0;
@@ -734,10 +734,10 @@ static void usage(FILE *fp, int argc, char **argv)
 
 int v_open_camera(void) {
     if (v_is_open) {
-        if (debug) fprintf(stderr, "+++ v_open_camera: already open\n");
+        if (debug) LOG( "+++ v_open_camera: already open\n");
         return 0;
     }
-    if (debug) fprintf(stderr, "+++ v_open_camera: opening camera\n");
+    if (debug) LOG( "+++ v_open_camera: opening camera\n");
 
     int i, j, beg, end, fbeg, fend;
     if (v_last_working_video_source >= 0) {
@@ -756,21 +756,21 @@ int v_open_camera(void) {
         v_force_format = j;
         for (i = beg; i <= end; i++) {
             sprintf(v_dev_name, "/dev/video%d", i);
-            if (debug) fprintf(stderr, "+++ v_open_camera: trying device %s with format %d\n", v_dev_name, j);
+            if (debug) LOG( "+++ v_open_camera: trying device %s with format %d\n", v_dev_name, j);
             mem_manager_begin();
             if (v_open_device() < 0) {
-                if (debug) fprintf(stderr, "--- v_open_camera: v_open_device failed\n");
+                if (debug) LOG( "--- v_open_camera: v_open_device failed\n");
                 mem_manager_end();
                 continue;
             }
             if (v_init_device() < 0) {
-                if (debug) fprintf(stderr, "--- v_open_camera: v_init_device failed\n");
+                if (debug) LOG( "--- v_open_camera: v_init_device failed\n");
                 v_close_device();
                 mem_manager_end();
                 continue;
             }
             if (v_start_capturing() < 0) {
-                if (debug) fprintf(stderr, "--- v_open_camera: v_start_capturing failed\n");
+                if (debug) LOG( "--- v_open_camera: v_start_capturing failed\n");
                 v_uninit_device();
                 v_close_device();
                 mem_manager_end();
@@ -780,12 +780,12 @@ int v_open_camera(void) {
             v_last_working_video_source = i;
             v_last_working_video_format = j;
             v_is_open = 1;
-            if (debug) fprintf(stderr, "+++ v_open_camera: successfully opened %s\n", v_dev_name);
+            if (debug) LOG( "+++ v_open_camera: successfully opened %s\n", v_dev_name);
             return 0;
         }
     }
 
-    if (debug) fprintf(stderr, "--- v_open_camera: failed to open any camera device\n");
+    if (debug) LOG( "--- v_open_camera: failed to open any camera device\n");
     v_last_working_video_source = -1;
     v_last_working_video_format = 0;
     v_is_open = 0;
@@ -794,25 +794,25 @@ int v_open_camera(void) {
 
 int v_capture_frame_to_file(const char *v_filename) {
     if (!v_is_open) {
-        if (debug) fprintf(stderr, "--- v_capture_frame_to_file: camera not open\n");
+        if (debug) LOG( "--- v_capture_frame_to_file: camera not open\n");
         return -1;
     }
-    if (debug) fprintf(stderr, "+++ v_capture_frame_to_file: capturing to %s\n", v_filename);
+    if (debug) LOG( "+++ v_capture_frame_to_file: capturing to %s\n", v_filename);
     int result = v_mainloop(v_filename, 1);
-    if (debug) fprintf(stderr, "+++ v_capture_frame_to_file: v_mainloop result: %d\n", result);
+    if (debug) LOG( "+++ v_capture_frame_to_file: v_mainloop result: %d\n", result);
     return result;
 }
 
 void v_close_camera(void) {
     if (!v_is_open) {
-        if (debug) fprintf(stderr, "+++ v_close_camera: camera not open\n");
+        if (debug) LOG( "+++ v_close_camera: camera not open\n");
         return;
     }
-    if (debug) fprintf(stderr, "+++ v_close_camera: closing camera\n");
+    if (debug) LOG( "+++ v_close_camera: closing camera\n");
     v_stop_capturing();
     v_uninit_device();
     v_close_device();
     mem_manager_end();
     v_is_open = 0;
-    if (debug) fprintf(stderr, "+++ v_close_camera: camera closed\n");
+    if (debug) LOG( "+++ v_close_camera: camera closed\n");
 }

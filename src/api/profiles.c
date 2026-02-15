@@ -197,7 +197,7 @@ void handle_delete_profile(struct REQUEST *req, const char *profile_id_str) {
       }
 
       // Log profile deletion
-      fprintf(stderr, "Profile %d deleted\n", profile_id);
+      LOG( "Profile %d deleted\n", profile_id);
 
       snprintf(api_response_buffer, sizeof(api_response_buffer),
               "{\"status\": \"success\", \"message\": \"Profile deleted.\"}");
@@ -417,7 +417,7 @@ void handle_post_save_as(struct REQUEST *req, const char *source_id_str) {
     set_loaded_from(source_id);
 
     // Log profile application
-    fprintf(stderr, "Profile %d applied to printer config\n", source_id);
+    LOG( "Profile %d applied to printer config\n", source_id);
 
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"success\", \"message\": \"Profile applied to printer. Please reboot for changes to take effect.\"}");
@@ -505,9 +505,9 @@ void handle_post_save_as(struct REQUEST *req, const char *source_id_str) {
 
   // Log profile save
   if (is_source_current) {
-    fprintf(stderr, "Profile %d saved from current config\n", target_id);
+    LOG( "Profile %d saved from current config\n", target_id);
   } else {
-    fprintf(stderr, "Profile %d saved from profile %d\n", target_id, source_id);
+    LOG( "Profile %d saved from profile %d\n", target_id, source_id);
   }
 
   snprintf(api_response_buffer, sizeof(api_response_buffer),

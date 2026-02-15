@@ -83,7 +83,7 @@ usage(char *name) {
     struct group *gr;
 
     h = strrchr(name, '/');
-    fprintf(stderr,
+    LOG(
             "This is a lightweight http server for static content\n"
             "\n"
             "usage: %s [ options ]\n"
@@ -139,7 +139,7 @@ usage(char *name) {
     if (getuid() == 0) {
         pw = getpwuid(0);
         gr = getgrgid(getgid());
-        fprintf(stderr,
+        LOG(
                 "  -u user  run as user >user<                  [%s]\n"
                 "  -g group run as group >group<                [%s]\n",
                 pw ? pw->pw_name : "???",
@@ -214,11 +214,11 @@ static void create_root_doc_if_required(void) {
 
 static void run_as(int id) {
     if (-1 == seteuid(id)) {
-        fprintf(stderr, "seteuid(%d): %s\n", id, strerror(errno));
+        LOG( "seteuid(%d): %s\n", id, strerror(errno));
         exit(1);
     }
     if (debug)
-        fprintf(stderr, "run_as: uid=%d euid=%d\n", getuid(), geteuid());
+        LOG( "run_as: uid=%d euid=%d\n", getuid(), geteuid());
 }
 
 static void
@@ -281,7 +281,7 @@ fix_ug(void) {
     strncpy(user, pw->pw_name, 16);
 
     if (debug)
-        fprintf(stderr, "fix_ug: uid=%d euid=%d / gid=%d egid=%d\n",
+        LOG( "fix_ug: uid=%d euid=%d / gid=%d egid=%d\n",
                 getuid(), geteuid(), getgid(), getegid());
 }
 
@@ -364,7 +364,7 @@ void xperror(int loglevel, char *txt, char *peerhost) {
         if (NULL == peerhost)
             perror(txt);
         else
-            fprintf(stderr, "%s: %s (peer=%s)\n", txt, strerror(errno),
+            LOG( "%s: %s (peer=%s)\n", txt, strerror(errno),
                     peerhost);
     }
     if (usesyslog) {
@@ -381,9 +381,9 @@ void xerror(int loglevel, char *txt, char *peerhost) {
         return;
     if (have_tty) {
         if (NULL == peerhost)
-            fprintf(stderr, "%s\n", txt);
+            LOG( "%s\n", txt);
         else
-            fprintf(stderr, "%s (peer=%s)\n", txt, peerhost);
+            LOG( "%s (peer=%s)\n", txt, peerhost);
     }
     if (usesyslog) {
         if (NULL == peerhost)
@@ -410,7 +410,7 @@ mainloop(void *thread_arg) {
         if (got_sighup) {
             if (NULL != logfile && 0 != strcmp(logfile, "-")) {
                 if (debug)
-                    fprintf(stderr, "got SIGHUP, reopen logfile %s\n", logfile);
+                    LOG( "got SIGHUP, reopen logfile %s\n", logfile);
                 DO_LOCK(lock_logfile);
                 if (logfh)
                     fclose(logfh);
@@ -465,7 +465,7 @@ mainloop(void *thread_arg) {
             if (NULL == req) {
                 /* oom: let the request sit in the listen queue */
                 if (debug)
-                    fprintf(stderr, "oom\n");
+                    LOG( "oom\n");
             } else {
                 memset(req, 0, sizeof(struct REQUEST));
                 if (-1 == (req->fd = accept(slisten, NULL, NULL))) {
@@ -483,7 +483,7 @@ mainloop(void *thread_arg) {
                     conns = req;
                     curr_conn++;
                     if (debug)
-                        fprintf(stderr, "%03d: new request (%d)\n", req->fd, curr_conn);
+                        LOG( "%03d: new request (%d)\n", req->fd, curr_conn);
                     length = sizeof(req->peer);
                     if (-1 == getpeername(req->fd, (struct sockaddr *)&(req->peer), &length)) {
                         xperror(LOG_WARNING, "getpeername", NULL);
@@ -493,7 +493,7 @@ mainloop(void *thread_arg) {
                                 req->peerhost, 64, req->peerserv, 8,
                                 NI_NUMERICHOST | NI_NUMERICSERV);
                     if (debug)
-                        fprintf(stderr, "%03d: connect from (%s)\n",
+                        LOG( "%03d: connect from (%s)\n",
                                 req->fd, req->peerhost);
                 }
             }
@@ -527,7 +527,7 @@ mainloop(void *thread_arg) {
                 if (now > req->ping + keepalive_time ||
                     curr_conn > max_conn * 9 / 10) {
                     if (debug)
-                        fprintf(stderr, "%03d: keepalive timeout\n", req->fd);
+                        LOG( "%03d: keepalive timeout\n", req->fd);
                     req->state = STATE_CLOSE;
                 }
             } else {
@@ -603,7 +603,7 @@ mainloop(void *thread_arg) {
                 if (req->hdata == req->lreq) {
                     /* ok, wait for the next one ... */
                     if (debug)
-                        fprintf(stderr, "%03d: keepalive wait\n", req->fd);
+                        LOG( "%03d: keepalive wait\n", req->fd);
                     req->state = STATE_KEEPALIVE;
                     req->hdata = 0;
                     req->lreq = 0;
@@ -611,14 +611,14 @@ mainloop(void *thread_arg) {
                     if (1 == req->tcp_cork) {
                         req->tcp_cork = 0;
                         if (debug)
-                            fprintf(stderr, "%03d: tcp_cork=%d\n", req->fd, req->tcp_cork);
+                            LOG( "%03d: tcp_cork=%d\n", req->fd, req->tcp_cork);
                         setsockopt(req->fd, SOL_TCP, TCP_CORK, &req->tcp_cork, sizeof(int));
                     }
 #endif
                 } else {
                     /* there is a pipelined request in the queue ... */
                     if (debug)
-                        fprintf(stderr, "%03d: keepalive pipeline\n", req->fd);
+                        LOG( "%03d: keepalive pipeline\n", req->fd);
                     req->state = STATE_READ_HEADER;
                     memmove(req->hreq, req->hreq + req->lreq,
                             req->hdata - req->lreq);
@@ -641,7 +641,7 @@ mainloop(void *thread_arg) {
                     free_dir(req->dir);
                 curr_conn--;
                 if (debug)
-                    fprintf(stderr, "%03d: done (%d)\n", req->fd, curr_conn);
+                    LOG( "%03d: done (%d)\n", req->fd, curr_conn);
                 /* unlink from list */
                 tmp = req;
                 if (prev == NULL) {
@@ -812,7 +812,7 @@ int main(int argc, char *argv[]) {
         ask.ai_family = PF_INET6;
         if (0 != (rc = getaddrinfo(listen_ip, listen_port, &ask, &res))) {
             if (debug)
-                fprintf(stderr, "getaddrinfo (ipv6): %s\n", gai_strerror(rc));
+                LOG( "getaddrinfo (ipv6): %s\n", gai_strerror(rc));
         } else {
             if (-1 == (slisten = socket(res->ai_family, res->ai_socktype,
                                         res->ai_protocol)) &&
@@ -825,7 +825,7 @@ int main(int argc, char *argv[]) {
     if (-1 == slisten && v4) {
         ask.ai_family = PF_INET;
         if (0 != (rc = getaddrinfo(listen_ip, listen_port, &ask, &res))) {
-            fprintf(stderr, "getaddrinfo (ipv4): %s\n", gai_strerror(rc));
+            LOG( "getaddrinfo (ipv4): %s\n", gai_strerror(rc));
             exit(1);
         }
         if (-1 == (slisten = socket(res->ai_family, res->ai_socktype,
@@ -846,7 +846,7 @@ int main(int argc, char *argv[]) {
     if (0 != (rc = getnameinfo((struct sockaddr *)&ss, ss_len,
                               host, INET6_ADDRSTRLEN, serv, 15,
                               NI_NUMERICHOST | NI_NUMERICSERV))) {
-        fprintf(stderr, "getnameinfo: %s\n", gai_strerror(rc));
+        LOG( "getnameinfo: %s\n", gai_strerror(rc));
         exit(1);
     }
 
@@ -900,14 +900,14 @@ int main(int argc, char *argv[]) {
 
     if (pidfile) {
         if (-1 == (pid = open(pidfile, O_WRONLY | O_CREAT | O_EXCL, 0600))) {
-            fprintf(stderr, "open %s: %s\n", pidfile, strerror(errno));
+            LOG( "open %s: %s\n", pidfile, strerror(errno));
             exit(1);
         }
         close_on_exec(pid);
     }
 
     if (debug) {
-        fprintf(stderr,
+        LOG(
                 "http server started\n"
                 "  ipv6  : %s\n"
                 "  node  : %s\n"
@@ -919,7 +919,7 @@ int main(int argc, char *argv[]) {
                 res->ai_family == PF_INET6 ? "yes" : "no",
                 server_host, host, tcp_port, doc_root, user, group);
     } else {
-        fprintf(stderr, "webfsd started on port %d\n", tcp_port);
+        LOG( "webfsd started on port %d\n", tcp_port);
     }
 
     /* run as daemon - detach from terminal */
@@ -931,17 +931,7 @@ int main(int argc, char *argv[]) {
             case 0:
                 close(0);
                 close(1);
-                /* Redirect stderr to log file if logging is enabled */
-                if (logfile && logfh) {
-                    int logfd = fileno(logfh);
-                    if (logfd >= 0) {
-                        dup2(logfd, 2);
-                    } else {
-                        close(2);
-                    }
-                } else {
-                    close(2);
-                }
+                close(2);
                 setsid();
                 have_tty = 0;
                 break;
@@ -982,6 +972,6 @@ int main(int argc, char *argv[]) {
     if (pidfile)
         unlink(pidfile);
     if (debug)
-        fprintf(stderr, "bye...\n");
+        LOG( "bye...\n");
     exit(0);
 }

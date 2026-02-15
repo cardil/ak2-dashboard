@@ -54,7 +54,7 @@ void init_mime(char *file, char *def) {
 
     mime_default = strdup(def);
     if (NULL == (fp = fopen(file, "r"))) {
-        fprintf(stderr, "open %s: %s\n", file, strerror(errno));
+        LOG( "open %s: %s\n", file, strerror(errno));
         return;
     }
     while (NULL != fgets(line, 127, fp)) {

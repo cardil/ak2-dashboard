@@ -175,7 +175,7 @@ void handle_post_security_password(struct REQUEST *req) {
   int result = system(command);
 
   if (result == 0) {
-    fprintf(stderr, "Root password changed successfully\n");
+    LOG("Root password changed successfully\n");
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"success\", \"message\": \"Root password changed successfully\"}");
     req->body = api_response_buffer;
@@ -183,7 +183,7 @@ void handle_post_security_password(struct REQUEST *req) {
     req->mime = "application/json";
     mkheader(req, 200);
   } else {
-    fprintf(stderr, "Failed to change root password (exit code: %d)\n", result);
+    LOG("Failed to change root password (exit code: %d)\n", result);
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"error\", \"message\": \"Failed to change password\"}");
     req->body = api_response_buffer;
@@ -195,7 +195,7 @@ void handle_post_security_password(struct REQUEST *req) {
 
 // POST /api/system/reboot - Reboot the system
 void handle_post_system_reboot(struct REQUEST *req) {
-  fprintf(stderr, "System reboot requested\n");
+  LOG("System reboot requested\n");
   system("sync && reboot &");
 
   snprintf(api_response_buffer, sizeof(api_response_buffer),
@@ -231,12 +231,12 @@ void handle_post_system_ssh(struct REQUEST *req) {
 
   if (strcmp(action, "start") == 0) {
     system("/opt/etc/init.d/S51dropbear start 2>&1");
-    fprintf(stderr, "SSH service started\n");
+    LOG("SSH service started\n");
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"success\", \"message\": \"SSH service started\"}");
   } else if (strcmp(action, "stop") == 0) {
     system("/opt/etc/init.d/S51dropbear stop 2>&1");
-    fprintf(stderr, "SSH service stopped\n");
+    LOG("SSH service stopped\n");
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"success\", \"message\": \"SSH service stopped\"}");
   } else {

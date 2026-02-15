@@ -51,7 +51,7 @@ xgetpwuid(uid_t uid) {
         cache[next] = strdup(pw->pw_name);
     uids[next] = uid;
     if (debug)
-        fprintf(stderr, "uid: %3d  n=%2d, name=%s\n",
+        LOG( "uid: %3d  n=%2d, name=%s\n",
                 (int)uid, next, cache[next] ? cache[next] : "?");
 
     next++;
@@ -90,7 +90,7 @@ xgetgrgid(gid_t gid) {
         cache[next] = strdup(gr->gr_name);
     gids[next] = gid;
     if (debug)
-        fprintf(stderr, "gid: %3d  n=%2d, name=%s\n",
+        LOG( "gid: %3d  n=%2d, name=%s\n",
                 (int)gid, next, cache[next] ? cache[next] : "?");
 
     next++;
@@ -151,7 +151,7 @@ read_dir(char *filename, char *path, struct filelist *fl) {
     fl->count = 0;
 
     if (debug)
-        fprintf(stderr, "dir: reading %s\n", filename);
+        LOG( "dir: reading %s\n", filename);
     if (NULL == (dir = opendir(filename)))
         return -1;
 
@@ -210,7 +210,7 @@ read_dir(char *filename, char *path, struct filelist *fl) {
     return 0;
 
 oom:
-    fprintf(stderr, "oom\n");
+    LOG( "oom\n");
     closedir(dir);
     free_filelist(fl);
     return -1;
@@ -345,7 +345,7 @@ get_dir_json(char *filename, char *path, int *length) {
     return buf;
 
 oom:
-    fprintf(stderr, "oom\n");
+    LOG( "oom\n");
     free_filelist(&fl);
     if (buf)
         free(buf);
@@ -489,7 +489,7 @@ ls(time_t now, char *hostname, char *filename, char *path, int *length) {
     return buf;
 
 oom:
-    fprintf(stderr, "oom\n");
+    LOG( "oom\n");
     free_filelist(&fl);
     if (buf)
         free(buf);
@@ -511,7 +511,7 @@ void free_dir(struct DIRCACHE *dir) {
     }
     DO_UNLOCK(dir->lock_refcount);
     if (debug)
-        fprintf(stderr, "dir: delete %s\n", dir->path);
+        LOG( "dir: delete %s\n", dir->path);
     FREE_LOCK(dir->lock_refcount);
     FREE_LOCK(dir->lock_reading);
     FREE_COND(dir->wait_reading);
@@ -535,7 +535,7 @@ get_dir(struct REQUEST *req, char *filename) {
             else
                 prev->next = this->next;
             if (debug)
-                fprintf(stderr, "dir: found %s\n", this->path);
+                LOG( "dir: found %s\n", this->path);
             break;
         }
         if (i > max_dircache) {

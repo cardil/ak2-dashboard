@@ -305,7 +305,7 @@ int system_with_output(const char *cmd, int line_number) {
     /* Read the output a line at a time - output it. */
     while (fgets(system_buffer, SYSTEM_BUFFER_MAX, fp) != NULL) {
         if (debug) {
-            fprintf(stderr, "+++ system: %s\n", system_buffer);
+            LOG( "+++ system: %s\n", system_buffer);
         }
         n++;
         if (n == line_number)
@@ -871,18 +871,18 @@ int control_api(config_option_t query) {
     int result = -1;
     char *action = get_key_value(query, "action", "unknown");
     if (!strcmp(action, "reboot")) {
-        fprintf(stderr, "System reboot requested\n");
+        LOG( "System reboot requested\n");
         system_with_output("reboot", 1);
         result = 1;
     }
     if (!strcmp(action, "poweroff")) {
-        fprintf(stderr, "System poweroff requested\n");
+        LOG( "System poweroff requested\n");
         system_with_output("poweroff", 1);
         result = 1;
     }
     if (!strcmp(action, "log_clear")) {
         system("cat /dev/null > /mnt/UDISK/log");
-        fprintf(stderr, "Log cleared\n");
+        LOG( "Log cleared\n");
         result = 1;
     }
     if (!strcmp(action, "ssh_start")) {
@@ -890,7 +890,7 @@ int control_api(config_option_t query) {
         result = 0;
         if (ssh == 1) {
             system_with_output("/opt/etc/init.d/S51dropbear start 2>&1", 1);
-            fprintf(stderr, "SSH service started\n");
+            LOG( "SSH service started\n");
             result = 2;
         } else {
             if (ssh == 2)
@@ -902,11 +902,25 @@ int control_api(config_option_t query) {
         result = 0;
         if (ssh == 2) {
             system_with_output("/opt/etc/init.d/S51dropbear stop 2>&1", 1);
-            fprintf(stderr, "SSH service stopped\n");
+            LOG( "SSH service stopped\n");
             result = 1;
         } else {
             if (ssh == 1)
                 result = 1;
+        }
+    }
+    if (!strcmp(action, "ssh_restart")) {
+        int ssh = get_ssh_status();
+        result = 0;
+        if (ssh == 2) {
+            system_with_output("/opt/etc/init.d/S51dropbear restart 2>&1", 1);
+            LOG( "SSH service restarted\n");
+            result = 2;
+        } else {
+            // If not running, start it
+            system_with_output("/opt/etc/init.d/S51dropbear start 2>&1", 1);
+            LOG( "SSH service started\n");
+            result = 2;
         }
     }
     sprintf(static_template_buffer, "{\"api_ver\":1, \"result\":%d}", result);
@@ -1243,7 +1257,7 @@ int update_printer_config_file(const char *config_file, const char *parameter_na
                     // this is the line with the requested parameter, modify it
                     match_found = 1;
                     if (debug)
-                        fprintf(stderr, "update_printer_config_file: MATCH! param='%s' old_line='%.*s' new_value='%s'\n",
+                        LOG( "update_printer_config_file: MATCH! param='%s' old_line='%.*s' new_value='%s'\n",
                                 parameter_name, n - 1, b, replacement_value);
                     fwrite(par, 1, par_size, ofile);
                     fwrite(replacement_value, 1, strlen(replacement_value), ofile);
@@ -1254,7 +1268,7 @@ int update_printer_config_file(const char *config_file, const char *parameter_na
                 }
             }
             if (debug && !match_found)
-                fprintf(stderr, "update_printer_config_file: NO MATCH for param='%s' in file='%s'\n",
+                LOG( "update_printer_config_file: NO MATCH for param='%s' in file='%s'\n",
                         parameter_name, config_file);
             fclose(ifile);
             fflush(ofile);
@@ -1266,7 +1280,7 @@ int update_printer_config_file(const char *config_file, const char *parameter_na
             custom_copy_file("/user/printer-config.tmp", config_file, "wb", NULL);
             remove("/user/printer-config.tmp");
             // Log config modification (always, not just debug)
-            fprintf(stderr, "Config updated: %s [%s]\n", config_file, parameter_name);
+            LOG( "Config updated: %s [%s]\n", config_file, parameter_name);
             return 0;
         } else {
             fclose(ifile);
@@ -1284,35 +1298,35 @@ static pthread_mutex_t webcam_mutex = PTHREAD_MUTEX_INITIALIZER;
 void *webcam_capture_thread(void *arg) {
     pthread_detach(pthread_self());
 
-    if (debug) fprintf(stderr, "+++ webcam thread: starting\n");
+    if (debug) LOG( "+++ webcam thread: starting\n");
     if (v_open_camera() != 0) {
-        if (debug) fprintf(stderr, "--- webcam thread: v_open_camera failed\n");
+        if (debug) LOG( "--- webcam thread: v_open_camera failed\n");
         pthread_mutex_lock(&webcam_mutex);
         webcam_thread_running = 0;
         pthread_mutex_unlock(&webcam_mutex);
         return NULL;
     }
-    if (debug) fprintf(stderr, "+++ webcam thread: v_open_camera successful\n");
+    if (debug) LOG( "+++ webcam thread: v_open_camera successful\n");
 
     while (1) {
         pthread_mutex_lock(&webcam_mutex);
         time_t now = time(NULL);
         if (now - last_webcam_request_time > 2) {
-            if (debug) fprintf(stderr, "+++ webcam thread: timeout, exiting\n");
+            if (debug) LOG( "+++ webcam thread: timeout, exiting\n");
             webcam_thread_running = 0;
             pthread_mutex_unlock(&webcam_mutex);
             break;
         }
         pthread_mutex_unlock(&webcam_mutex);
 
-        if (debug) fprintf(stderr, "+++ webcam thread: capturing frame\n");
+        if (debug) LOG( "+++ webcam thread: capturing frame\n");
         // capture one frame to the file "/tmp/cam.jpg"
         int result = v_capture_frame_to_file("/tmp/cam.tmp");
         if (result == 0) {
-            if (debug) fprintf(stderr, "+++ webcam thread: capture successful\n");
+            if (debug) LOG( "+++ webcam thread: capture successful\n");
             rename("/tmp/cam.tmp", "/tmp/cam.jpg");
         } else {
-            if (debug) fprintf(stderr, "--- webcam thread: capture failed, result: %d\n", result);
+            if (debug) LOG( "--- webcam thread: capture failed, result: %d\n", result);
             // errors, use the default image
             custom_copy_file("/mnt/UDISK/webfs/webcam/default.jpg", "/tmp/cam.jpg", "wb", NULL);
         }
@@ -1320,9 +1334,9 @@ void *webcam_capture_thread(void *arg) {
         usleep(75000);  // 75ms
     }
 
-    if (debug) fprintf(stderr, "+++ webcam thread: closing camera\n");
+    if (debug) LOG( "+++ webcam thread: closing camera\n");
     v_close_camera();
-    if (debug) fprintf(stderr, "+++ webcam thread: exited\n");
+    if (debug) LOG( "+++ webcam thread: exited\n");
     return NULL;
 }
 
@@ -1345,7 +1359,7 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
     }
 
     if (debug) {
-        fprintf(stderr, "+++ process_custom_pages: checking for custom pages for request path: %s\n", req->path);
+        LOG( "+++ process_custom_pages: checking for custom pages for request path: %s\n", req->path);
     }
 
     if ((strstr(filename_str, "/mnt/UDISK/webfs/files/"))) {
@@ -1360,7 +1374,7 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
 
     // ----------------------------- access to the 3d visualizer index.html -----------------------------
     if ((strcmp(req->path, "/deprecated/mesh/") == 0 || strcmp(req->path, "/deprecated/mesh") == 0 || strcmp(req->path, "/deprecated/mesh/index.html") == 0)) {
-        if (debug) fprintf(stderr, "+++ process_custom_pages: handling /deprecated/mesh/index.html\n");
+        if (debug) LOG( "+++ process_custom_pages: handling /deprecated/mesh/index.html\n");
         // turn off the cache
         req->cache_turn_off = 'Y';
 
@@ -1412,10 +1426,10 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
         pthread_mutex_lock(&webcam_mutex);
         last_webcam_request_time = time(NULL);
         if (!webcam_thread_running) {
-            if (debug) fprintf(stderr, "+++ process_custom_pages: starting webcam thread\n");
+            if (debug) LOG( "+++ process_custom_pages: starting webcam thread\n");
             webcam_thread_running = 1;
             if (pthread_create(&webcam_thread_id, NULL, webcam_capture_thread, NULL) != 0) {
-                if (debug) fprintf(stderr, "--- process_custom_pages: failed to create webcam thread\n");
+                if (debug) LOG( "--- process_custom_pages: failed to create webcam thread\n");
                 webcam_thread_running = 0;
             }
         }
@@ -1452,7 +1466,7 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
 
     // ----------------------------- access to the tools index.html -------------------------
     if ((strcmp(req->path, "/deprecated/tools/") == 0 || strcmp(req->path, "/deprecated/tools") == 0 || strcmp(req->path, "/deprecated/tools/index.html") == 0)) {
-        if (debug) fprintf(stderr, "+++ process_custom_pages: handling /deprecated/tools/index.html\n");
+        if (debug) LOG( "+++ process_custom_pages: handling /deprecated/tools/index.html\n");
         response_code = 0;
         error_code = 0;
 
@@ -1490,7 +1504,7 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
 
     // process all actions from /leveling/index.html and go back to the index.html
     if ((!strcmp(req->path, "/deprecated/tools/response.html"))) {
-        if (debug) fprintf(stderr, "+++ process_custom_pages: handling /deprecated/tools/response.html\n");
+        if (debug) LOG( "+++ process_custom_pages: handling /deprecated/tools/response.html\n");
         // set no error and no information messages
         response_code = 0;
         error_code = 0;
@@ -1520,7 +1534,7 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
         if (!strcmp(action, "log_clear")) {
             // log clear
             system("cat /dev/null > /mnt/UDISK/log");
-            fprintf(stderr, "Log cleared\n");
+            LOG( "Log cleared\n");
             response_code = 8;
         }
 
@@ -1537,7 +1551,7 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
             // ssh start
             if (file_exists("/opt/etc/init.d/S51dropbear")) {
                 system_with_output("/opt/etc/init.d/S51dropbear start 2>&1", 1);
-                fprintf(stderr, "SSH service started\n");
+                LOG( "SSH service started\n");
                 response_code = 8;
             } else {
                 error_code = 13;
@@ -1547,7 +1561,7 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
             // ssh stop
             if (file_exists("/opt/etc/init.d/S51dropbear")) {
                 system_with_output("/opt/etc/init.d/S51dropbear stop 2>&1", 1);
-                fprintf(stderr, "SSH service stopped\n");
+                LOG( "SSH service stopped\n");
                 response_code = 8;
             } else {
                 error_code = 13;
@@ -1854,7 +1868,7 @@ parse_ranges(struct REQUEST *req) {
         if (*h == ',')
             req->ranges++;
     if (debug)
-        fprintf(stderr, "%03d: %d ranges:", req->fd, req->ranges);
+        LOG( "%03d: %d ranges:", req->fd, req->ranges);
     req->r_start = malloc(req->ranges * sizeof(off_t));
     req->r_end = malloc(req->ranges * sizeof(off_t));
     req->r_head = malloc((req->ranges + 1) * BR_HEADER);
@@ -1870,7 +1884,7 @@ parse_ranges(struct REQUEST *req) {
         if (req->r_hlen)
             free(req->r_hlen);
         if (debug)
-            fprintf(stderr, "oom\n");
+            LOG( "oom\n");
         return 500;
     }
     for (i = 0, off = 0; i < req->ranges; i++) {
@@ -1895,7 +1909,7 @@ parse_ranges(struct REQUEST *req) {
         off++; /* skip "," */
         /* ranges ok? */
         if (debug)
-            fprintf(stderr, " %d-%d",
+            LOG( " %d-%d",
                     (int)(req->r_start[i]),
                     (int)(req->r_end[i]));
         if (req->r_start[i] > req->r_end[i] ||
@@ -1903,13 +1917,13 @@ parse_ranges(struct REQUEST *req) {
             goto parse_error;
     }
     if (debug)
-        fprintf(stderr, " ok\n");
+        LOG( " ok\n");
     return 0;
 
 parse_error:
     req->ranges = 0;
     if (debug)
-        fprintf(stderr, " range error\n");
+        LOG( " range error\n");
     return 400;
 }
 
@@ -2177,7 +2191,7 @@ void parse_request(struct REQUEST *req) {
     struct passwd *pw = NULL;
 
     if (debug)
-        fprintf(stderr, "%s\n", req->hreq);
+        LOG( "%s\n", req->hreq);
 
     /* parse request. Here, scanf is powerful :-) */
     if (4 != sscanf(req->hreq,
@@ -2214,11 +2228,11 @@ void parse_request(struct REQUEST *req) {
     unquote(req->path, req->query, req->uri);
     fixpath(req->path);
     if (debug)
-        fprintf(stderr, "%03d: %s \"%s\" HTTP/%d.%d\n",
+        LOG( "%03d: %s \"%s\" HTTP/%d.%d\n",
                 req->fd, req->type, req->path, req->major, req->minor);
 
     if (debug)
-        fprintf(stderr, "query: \"%s\"\n", req->query);
+        LOG( "query: \"%s\"\n", req->query);
 
     if (0 != strcmp(req->type, "GET") &&
         0 != strcmp(req->type, "HEAD") &&
@@ -2263,7 +2277,7 @@ void parse_request(struct REQUEST *req) {
         } else if (0 == strncasecmp(h, "Authorization: Basic ", 21)) {
             decode_base64(req->auth, h + 21, sizeof(req->auth) - 1);
             if (debug)
-                fprintf(stderr, "%03d: auth: %s\n", req->fd, req->auth);
+                LOG( "%03d: auth: %s\n", req->fd, req->auth);
         } else if (0 == strncasecmp(h, "Range: bytes=", 13)) {
             /* parsing must be done after fstat, we need the file size
                     for the boundary checks */
@@ -2277,13 +2291,13 @@ void parse_request(struct REQUEST *req) {
     }
     if (debug) {
         if (req->if_modified)
-            fprintf(stderr, "%03d: if-modified-since: \"%s\"\n",
+            LOG( "%03d: if-modified-since: \"%s\"\n",
                     req->fd, req->if_modified);
         if (req->if_unmodified)
-            fprintf(stderr, "%03d: if-unmodified-since: \"%s\"\n",
+            LOG( "%03d: if-unmodified-since: \"%s\"\n",
                     req->fd, req->if_unmodified);
         if (req->if_range)
-            fprintf(stderr, "%03d: if-range: \"%s\"\n",
+            LOG( "%03d: if-range: \"%s\"\n",
                     req->fd, req->if_range);
     }
 
