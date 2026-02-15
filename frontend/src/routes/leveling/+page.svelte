@@ -203,9 +203,20 @@
     }
   }
 
-  function handleReboot() {
-    // Mocking reboot by reloading the page
-    window.location.reload()
+  async function handleReboot() {
+    try {
+      const response = await fetch("/api/do.json?action=reboot")
+      if (response.ok) {
+        toast.success("Printer is rebooting...")
+        // Close the modal
+        modalState = "closed"
+      } else {
+        throw new Error("Reboot request failed")
+      }
+    } catch (error) {
+      console.error("Error during reboot:", error)
+      toast.error("Failed to reboot printer")
+    }
   }
 
   async function handleSaveMesh(event: CustomEvent<{ slot: number }>) {
@@ -263,6 +274,17 @@
       await profilesStore.saveAs(sourceId, target, name)
 
       if (target === "current") {
+        // Show reboot modal when profile is applied to current
+        modalInfo = {
+          title: "Reboot Required",
+          message:
+            "Profile has been applied to the printer.\n\nA printer reboot is required for the changes to take full effect.",
+          buttons: [
+            { label: "Later", event: "close", class: "" },
+            { label: "Reboot Printer", event: "reboot", class: "reboot" },
+          ],
+        }
+        modalState = "reboot_needed"
         toast.success("Profile applied to printer. Reboot required.")
       } else if (target === "new") {
         toast.success(`Profile "${name}" created successfully`)
