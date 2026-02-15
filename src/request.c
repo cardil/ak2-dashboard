@@ -2509,6 +2509,7 @@ void parse_request(struct REQUEST *req) {
             req->body = get_dir_json(filename, req->path, &json_len);
             if (req->body) {
                 req->lbody = json_len;
+                req->body_is_malloced = 1;  /* Mark as dynamically allocated */
             }
         } else {
             req->mime = "text/html";

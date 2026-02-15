@@ -85,6 +85,7 @@ struct REQUEST {
     int lres;                  /* header length */
     char *mime;                /* mime type */
     char *body;
+    int body_is_malloced;      /* 1 if body was malloc'd and needs free() */
     off_t lbody;
     int bfd;         /* file descriptor */
     struct stat bst; /* file info */

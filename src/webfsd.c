@@ -586,8 +586,18 @@ mainloop(void *thread_arg) {
                     close(req->bfd);
                     req->bfd = -1;
                 }
+                /* Free dynamically allocated body (from get_dir_json) */
+                if (req->body && req->body_is_malloced) {
+                    free(req->body);
+                }
                 req->body = NULL;
+                req->body_is_malloced = 0;
                 req->mime = NULL;
+                /* Free request body from PUT/POST requests */
+                if (req->req_body) {
+                    free(req->req_body);
+                    req->req_body = NULL;
+                }
                 req->written = 0;
                 req->head_only = 0;
                 req->rh = 0;
@@ -661,6 +671,14 @@ mainloop(void *thread_arg) {
                 if (tmp->r_hlen)
                     free(tmp->r_hlen);
                 list_free(&tmp->header);
+                /* Free dynamically allocated body (from get_dir_json) */
+                if (tmp->body && tmp->body_is_malloced) {
+                    free(tmp->body);
+                }
+                /* Free request body from PUT/POST requests */
+                if (tmp->req_body) {
+                    free(tmp->req_body);
+                }
                 free(tmp);
             } else {
                 prev = req;
