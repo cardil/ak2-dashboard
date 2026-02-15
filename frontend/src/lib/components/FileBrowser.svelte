@@ -36,6 +36,10 @@
     size?: number
   }) {
     if (file.isDirectory) {
+      // Don't navigate if it's the parent directory marker
+      if (file.name === ".." || file.name === ".") {
+        return
+      }
       fileBrowserStore.navigate(file.name)
     } else {
       // Click to preview

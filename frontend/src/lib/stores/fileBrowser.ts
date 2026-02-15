@@ -40,9 +40,16 @@ function createFileBrowserStore() {
       if (response.ok) {
         const contentType = response.headers.get("content-type") || ""
         if (contentType.includes("application/json")) {
-          // JSON API response (mock mode)
+          // JSON API response
           const files: FileEntry[] = await response.json()
-          set(sortFiles(files))
+          // Filter out parent directory markers
+          const filteredFiles = files.filter(
+            (file) =>
+              file.name !== ".." &&
+              file.name !== "." &&
+              file.name.trim() !== "",
+          )
+          set(sortFiles(filteredFiles))
         } else {
           // HTML directory listing (real backend)
           const html = await response.text()
@@ -51,14 +58,23 @@ function createFileBrowserStore() {
           const links = Array.from(doc.querySelectorAll("a"))
           const files: FileEntry[] = links
             .map((link) => {
-              const name = link.textContent || ""
-              const isDirectory = name.endsWith("/")
+              const name = (link.textContent || "").trim()
+              const href = link.getAttribute("href") || ""
+              // Check if it's a directory by trailing slash in name or href
+              const isDirectory = name.endsWith("/") || href.endsWith("/")
+              const cleanName = isDirectory ? name.replace(/\/$/, "") : name
               return {
-                name: isDirectory ? name.slice(0, -1) : name,
+                name: cleanName,
                 isDirectory,
               }
             })
-            .filter((file) => file.name !== ".." && file.name !== ".") // Exclude parent and current directory
+            .filter(
+              (file) =>
+                file.name !== ".." &&
+                file.name !== "." &&
+                file.name !== "" &&
+                !file.name.startsWith(".."), // Also filter names starting with ..
+            )
           set(sortFiles(files))
         }
       } else {
