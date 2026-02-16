@@ -36,7 +36,7 @@ else
     export PRINTER_IP="${PRINTER_IP}"
     export PRINTER_USER="${PRINTER_USER:-root}"
     export PRINTER_PORT="${PRINTER_PORT:-22}"
-    export WEBFSD_PORT="${WEBFSD_PORT:-8000}"
+    export WEBFSD_PORT="${WEBFSD_PORT:-80}"
 fi
 
 echo ""

@@ -12,7 +12,7 @@ ssh_cfg="${configdir}/ssh.cfg"
 ip='192.168.1.242'
 username='root'
 port='22'
-webfsd_port='8000'
+webfsd_port='80'
 
 # Ensure config directory exists
 mkdir -p "$configdir"

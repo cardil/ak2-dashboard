@@ -91,6 +91,7 @@ void handle_get_profile(struct REQUEST *req, const char *profile_id_str) {
       if ((precision < 0.0001) || (precision > 0.1)) {
         precision = 0.01;
       }
+      free_config_file(current_params);
     } else {
       precision = 0.01; // Default if no parameters file
     }
@@ -109,6 +110,7 @@ void handle_get_profile(struct REQUEST *req, const char *profile_id_str) {
       if ((precision < 0.0001) || (precision > 0.1)) {
         precision = 0.01;
       }
+      free_config_file(profile_params);
     } else {
       precision = 0.01; // Default if no parameters file
     }
