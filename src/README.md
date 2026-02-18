@@ -125,10 +125,9 @@ LDFLAGS = -static
 - Content delivery
 
 **api.c** - Custom API endpoints
-- `/api/info.json` - Printer information
-- `/api/mesh.json` - Bed mesh data
-- `/api/system.json` - System statistics
-- `/api/logs` - Printer log access
+- `/api/system` - System information and statistics
+- `/api/profiles` - Profile management
+- `/api/security` - Password management
 - API request handling
 
 **api.h** - API definitions and structures
@@ -180,52 +179,30 @@ void send_json(struct request *req, const char *json);
 
 ## API Endpoints
 
-### GET /api/info.json
+### GET /api/system
 
-Returns printer and server information.
-
-**Response:**
-```json
-{
-  "printer_model": "K2Pro",
-  "update_version": "3.1.0",
-  "mqtt_webui_url": "http://192.168.1.234:5000",
-  "api_version": "1.0"
-}
-```
-
-### GET /api/mesh.json
-
-Returns current bed mesh data from printer.cfg.
+Returns system information and statistics. Reads directly from /proc files for optimal performance.
 
 **Response:**
 ```json
 {
-  "mesh_min": [10, 10],
-  "mesh_max": [290, 290],
-  "probe_count": [5, 5],
-  "points": [
-    [-0.09, -0.06, -0.03, -0.06, -0.09],
-    ...
-  ]
+  "api_ver": 1,
+  "total_mem": 114208768,
+  "free_mem": 43442176,
+  "free_mem_per": 38,
+  "cpu_use": 5,
+  "cpu_usr_use": 2,
+  "cpu_sys_use": 3,
+  "cpu_idle": 95,
+  "ssh_status": 2,
+  "uptime": "10:23:45"
 }
 ```
 
-### GET /api/system.json
-
-Returns system statistics.
-
-**Response:**
-```json
-{
-  "uptime": 86400,
-  "cpu_usage": 5.2,
-  "memory_total": 1024000,
-  "memory_used": 512000,
-  "temperature": 45.5,
-  "ssh_running": true
-}
-```
+**Fields:**
+- `ssh_status`: 0=not installed, 1=stopped, 2=running
+- `uptime`: HH:MM:SS format
+- Memory values in bytes
 
 ### GET /api/logs
 
@@ -414,8 +391,8 @@ tail -f /mnt/UDISK/printer.log
 
 **Test API Endpoints:**
 ```bash
-curl http://PRINTER_IP:8001/api/info.json
-curl http://PRINTER_IP:8001/api/system.json
+curl http://PRINTER_IP:8001/api/system
+curl http://PRINTER_IP:8001/api/webserver.json
 ```
 
 ## Debugging

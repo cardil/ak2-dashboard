@@ -21,7 +21,7 @@ const API_SOURCE_PATH = path.join(
   "api",
 )
 
-// Mock system state (enhances the static info.json)
+// Mock system state for /api/system endpoint
 interface SystemState {
   startTime: number
   ssh_status: number // 0 = stopped, 1 = starting, 2 = running
@@ -700,21 +700,8 @@ function formatUptime(seconds: number): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
 }
 
-// Update info.json with dynamic data (enhances the static file)
-function getDynamicInfoJson(): string {
-  const infoJsonPath = path.join(API_SOURCE_PATH, "info.json")
-  let baseInfo: any = {}
-
-  // Read base info.json if it exists
-  if (fs.existsSync(infoJsonPath)) {
-    try {
-      const fileContent = fs.readFileSync(infoJsonPath, "utf-8")
-      baseInfo = JSON.parse(fileContent)
-    } catch (error) {
-      console.error("[System Mock] Error reading info.json:", error)
-    }
-  }
-
+// Generate dynamic system info for /api/system endpoint
+function getDynamicSystemInfo(): string {
   // Calculate dynamic uptime
   const elapsed = Math.floor((Date.now() - systemState.startTime) / 1000)
   const uptime = formatUptime(elapsed)
@@ -726,20 +713,17 @@ function getDynamicInfoJson(): string {
   const cpu_idle = 100 - cpu_use
 
   // Simulate memory changes
-  const total_mem = baseInfo.total_mem || 114208768
+  const total_mem = 114208768
   const memVariation = Math.floor(Math.random() * 10) - 5
   const free_mem = Math.max(
     30000000,
-    Math.min(
-      total_mem,
-      (baseInfo.free_mem || 43442176) + memVariation * 1024 * 1024,
-    ),
+    Math.min(total_mem, 43442176 + memVariation * 1024 * 1024),
   )
   const free_mem_per = Math.floor((free_mem / total_mem) * 100)
 
-  // Return enhanced info with dynamic values
+  // Return system info
   return JSON.stringify({
-    api_ver: baseInfo.api_ver || 1,
+    api_ver: 1,
     total_mem,
     free_mem,
     free_mem_per,
@@ -759,11 +743,11 @@ export function createSystemApiMiddleware(): Connect.NextHandleFunction {
   return (req, res, next) => {
     const url = new URL(req.url!, `http://${req.headers.host}`)
 
-    // Handle /api/info.json - enhance with dynamic data
-    if (req.method === "GET" && url.pathname === "/api/info.json") {
+    // Handle /api/system - system information endpoint
+    if (req.method === "GET" && url.pathname === "/api/system") {
       res.setHeader("Content-Type", "application/json")
       res.statusCode = 200
-      res.end(getDynamicInfoJson())
+      res.end(getDynamicSystemInfo())
       return
     }
 

@@ -67,7 +67,7 @@
 
   onMount(() => {
     function fetchData() {
-      fetch("/api/info.json")
+      fetch("/api/system")
         .then((response) => response.json())
         .then((data) => {
           totalMemory = Math.round(data.total_mem / 1024 / 1024)

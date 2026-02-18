@@ -1,18 +1,28 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/sysinfo.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <dirent.h>
 
 #define JSMN_STATIC
 #define JSMN_PARENT_LINKS
 #include "jsmn.h"
 
+#include "httpd.h"
 #include "api.h"
 #include "api/helpers.h"
 #include "api/profiles.h"
 #include "api/slots.h"
 #include "api/settings.h"
+
+// External functions from request.c
+extern void get_memory_info(unsigned long long *total_mem, unsigned long long *free_mem);
+extern int file_exists(const char *path);
+extern char system_buffer[];
+extern int system_with_output(const char *cmd, int line_number);
 
 // A buffer to hold the JSON response
 char api_response_buffer[8192];
@@ -125,6 +135,12 @@ void handle_api_request(struct REQUEST *req, char *filename) {
     return;
   }
 
+  // GET /api/system - Get system information
+  if (strcmp(req->path, "/api/system") == 0 && strcmp(req->type, "GET") == 0) {
+    handle_get_system(req);
+    return;
+  }
+
   // POST /api/system/reboot
   if (strcmp(req->path, "/api/system/reboot") == 0 && strcmp(req->type, "POST") == 0) {
     handle_post_system_reboot(req);
@@ -192,6 +208,100 @@ void handle_post_security_password(struct REQUEST *req) {
     req->mime = "application/json";
     mkheader(req, 500);
   }
+}
+
+// GET /api/system - Get system information without using popen or disk writes
+void handle_get_system(struct REQUEST *req) {
+  struct sysinfo s_info;
+  int error = sysinfo(&s_info);
+  unsigned int uptime = 0;
+  if (!error) {
+    uptime = s_info.uptime;
+  }
+  int ut_h = uptime / 3600;
+  int ut_m = (uptime / 60) % 60;
+  int ut_s = uptime % 60;
+
+  // Get memory info (cgroup-aware for containers, sysinfo fallback for bare metal)
+  unsigned long long total_mem = 0;
+  unsigned long long free_mem = 0;
+  get_memory_info(&total_mem, &free_mem);
+  unsigned long long free_mem_per = total_mem > 0 ? (free_mem * 100) / total_mem : 0;
+
+  // Read CPU stats directly from /proc/stat
+  unsigned int cpu_use = 0;
+  unsigned int cpu_usr_use = 0;
+  unsigned int cpu_sys_use = 0;
+  unsigned int cpu_idle = 0;
+
+  FILE *fp = fopen("/proc/stat", "r");
+  if (fp) {
+    char line[256];
+    if (fgets(line, sizeof(line), fp)) {
+      char cpu[10];
+      int t0, t1, t2, t3, t4, t5, t6, t7, t8, t9;
+      int n = sscanf(line, "%s %d %d %d %d %d %d %d %d %d %d",
+        cpu, &t0, &t1, &t2, &t3, &t4, &t5, &t6, &t7, &t8, &t9);
+      if (n == 11) {
+        unsigned long long total = (unsigned long long)t0 + t2 + t3;
+        if (total > 0) {
+          cpu_use = (((unsigned long long)t0 + t2) * 100) / total;
+          cpu_usr_use = ((unsigned long long)t0 * 100) / total;
+          cpu_sys_use = ((unsigned long long)t2 * 100) / total;
+          cpu_idle = ((unsigned long long)t3 * 100) / total;
+        }
+      }
+    }
+    fclose(fp);
+  }
+
+  // Check SSH status by scanning /proc for dropbear processes
+  int ssh_status = 0;  // not installed
+  if (file_exists("/opt/etc/init.d/S51dropbear")) {
+    // Scan /proc to find dropbear process (equivalent to pidof dropbear)
+    DIR *proc_dir = opendir("/proc");
+    int found_dropbear = 0;
+    if (proc_dir) {
+      struct dirent *entry;
+      while ((entry = readdir(proc_dir)) != NULL && !found_dropbear) {
+        // Check if directory name is a number (PID) - skip if name doesn't start with digit
+        if (entry->d_name[0] >= '1' && entry->d_name[0] <= '9') {
+          char cmdline_path[256];
+          snprintf(cmdline_path, sizeof(cmdline_path), "/proc/%s/cmdline", entry->d_name);
+          FILE *cmdline_fp = fopen(cmdline_path, "r");
+          if (cmdline_fp) {
+            char cmdline[256];
+            size_t len = fread(cmdline, 1, sizeof(cmdline) - 1, cmdline_fp);
+            fclose(cmdline_fp);
+            if (len > 0) {
+              // Search for "dropbear" in the entire buffer (cmdline has null bytes between args)
+              for (size_t i = 0; i < len - 8; i++) {  // -8 for "dropbear" length
+                if (memcmp(&cmdline[i], "dropbear", 8) == 0) {
+                  found_dropbear = 1;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      closedir(proc_dir);
+    }
+    ssh_status = found_dropbear ? 2 : 1;  // 2=running, 1=stopped
+  }
+
+  // Build JSON response in memory
+  snprintf(api_response_buffer, sizeof(api_response_buffer),
+          "{\"api_ver\":1, \"total_mem\":%llu, \"free_mem\":%llu, \"free_mem_per\":%llu, "
+          "\"cpu_use\":%u, \"cpu_usr_use\":%u, \"cpu_sys_use\":%u, \"cpu_idle\":%u, "
+          "\"ssh_status\":%d, \"uptime\": \"%02d:%02d:%02d\"}",
+          (unsigned long long)total_mem, (unsigned long long)free_mem, (unsigned long long)free_mem_per,
+          cpu_use, cpu_usr_use, cpu_sys_use, cpu_idle, ssh_status, ut_h, ut_m, ut_s);
+
+  req->body = api_response_buffer;
+  req->lbody = strlen(api_response_buffer);
+  req->mime = "application/json";
+  mkheader(req, 200);
 }
 
 // POST /api/system/reboot - Reboot the system

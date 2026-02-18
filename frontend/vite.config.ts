@@ -25,7 +25,7 @@ export default defineConfig({
           server.middlewares.use(createKobraUnleashedHttpMiddleware(io))
         }
 
-        // System API must come before mockApi to handle dynamic info.json and do.json
+        // System API must come before mockApi to handle /api/system and /api/do.json
         server.middlewares.use(createSystemApiMiddleware())
         server.middlewares.use(createMockApiMiddleware(defaultMqttUrl))
         server.middlewares.use(createLevelingApiMiddleware())

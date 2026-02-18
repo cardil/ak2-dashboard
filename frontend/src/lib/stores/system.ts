@@ -21,7 +21,7 @@ function createSystemInfoStore() {
   async function fetchSystemInfo() {
     if (!browser) return
     try {
-      const response = await fetch("/api/info.json")
+      const response = await fetch("/api/system")
       if (response.ok) {
         const data = await response.json()
         set(data)

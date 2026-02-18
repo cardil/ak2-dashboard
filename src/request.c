@@ -809,7 +809,7 @@ static int read_u64_from_file(const char *path, U64 *value) {
 
 // Get memory info, preferring cgroup v2 files for container awareness
 // Falls back to sysinfo() if cgroup files are not available
-static void get_memory_info(U64 *total_mem, U64 *free_mem) {
+void get_memory_info(U64 *total_mem, U64 *free_mem) {
     U64 cgroup_max = 0;
     U64 cgroup_current = 0;
 
@@ -834,43 +834,6 @@ static void get_memory_info(U64 *total_mem, U64 *free_mem) {
     }
 }
 
-// update /mnt/UDISK/webfs/api/info.json
-int update_api(void) {
-    struct sysinfo s_info;
-    int error = sysinfo(&s_info);
-    U32 uptime = 0;
-    if (!error) {
-        uptime = s_info.uptime;
-    }
-    int ut_h, ut_m, ut_s;
-    ut_h = uptime / 3600;
-    ut_m = (uptime / 60) % 60;
-    ut_s = uptime % 60;
-    // Get memory info (cgroup-aware for containers, sysinfo fallback for bare metal)
-    U64 total_mem = 0;
-    U64 free_mem = 0;
-    get_memory_info(&total_mem, &free_mem);
-    U64 free_mem_per = total_mem > 0 ? (free_mem * 100) / total_mem : 0;
-    U32 cpu_use = 0;
-    U32 cpu_usr_use = 0;
-    U32 cpu_sys_use = 0;
-    U32 cpu_idle = 0;
-    char cpu[10];
-    int t0, t1, t2, t3, t4, t5, t6, t7, t8, t9;
-    system_with_output("cat /proc/stat", 1);
-    int n = sscanf(system_buffer, "%s %d %d %d %d %d %d %d %d %d %d", cpu, &t0, &t1, &t2, &t3, &t4, &t5, &t6, &t7, &t8, &t9);
-    if (n == 11) {
-        U64 total = (U64)t0 + t2 + t3;
-        cpu_use = (((U64)t0 + t2) * 100) / total;
-        cpu_usr_use = ((U64)t0 * 100) / total;
-        cpu_sys_use = ((U64)t2 * 100) / total;
-        cpu_idle = ((U64)t3 * 100) / total;
-    }
-    int ssh_status = get_ssh_status();
-    sprintf(static_template_buffer, "{\"api_ver\":1, \"total_mem\":%llu, \"free_mem\":%llu, \"free_mem_per\":%llu, \"cpu_use\":%u, \"cpu_usr_use\":%u, \"cpu_sys_use\":%u, \"cpu_idle\":%u, \"ssh_status\":%d, \"uptime\": \"%02d:%02d:%02d\"}", (unsigned long long)total_mem, (unsigned long long)free_mem, (unsigned long long)free_mem_per, cpu_use, cpu_usr_use, cpu_sys_use, cpu_idle, ssh_status, ut_h, ut_m, ut_s);
-    // export buffer to file
-    return custom_copy_file(NULL, "/mnt/UDISK/webfs/api/info.json", "wb", static_template_buffer);
-}
 
 // process action query and update /mnt/UDISK/webfs/api/do.json
 int control_api(config_option_t query) {
@@ -1449,15 +1412,6 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
 
         // Point the server to the image in tmpfs
         strcpy(filename_str, "/tmp/cam.jpg");
-        goto e_x_i_t;
-    }
-
-    // ----------------------------- access to the api.json file ----------------------------
-    if ((!strcmp(req->path, "/api/info.json"))) {
-        // turn off the cache
-        req->cache_turn_off = 'Y';
-
-        update_api();
         goto e_x_i_t;
     }
 
@@ -2400,9 +2354,10 @@ void parse_request(struct REQUEST *req) {
 
     // process the custom pages
     if (strncmp(req->path, "/api/", 5) == 0) {
-        // Check if it's a profiles or security API route
+        // Check if it's a profiles, security, or system API route
         if (strncmp(req->path, "/api/profiles", 13) == 0 ||
-            strncmp(req->path, "/api/security", 13) == 0) {
+            strncmp(req->path, "/api/security", 13) == 0 ||
+            strncmp(req->path, "/api/system", 11) == 0) {
             handle_api_request(req, filename);
             return; // API request handled, don't continue with file serving
         }

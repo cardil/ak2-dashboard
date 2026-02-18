@@ -17,7 +17,7 @@ const API_SOURCE_PATH = path.join(
 function getApiFilePath(url: string): string | null {
   const requestUrl = new URL(url, "http://localhost")
   const apiEndpoint = requestUrl.pathname.substring("/api/".length)
-  // Skip info.json and do.json - let systemApi handle them dynamically
+  // Only handle webserver.json - other endpoints handled by systemApi
   if (!apiEndpoint || !["webserver.json"].includes(apiEndpoint)) {
     return null
   }

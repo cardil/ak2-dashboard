@@ -238,6 +238,7 @@ extern int flushlog;
 #define SYSTEM_BUFFER_MAX 1024
 extern char system_buffer[SYSTEM_BUFFER_MAX];
 extern int system_with_output(const char *cmd, int line_number);
+extern void get_memory_info(unsigned long long *total_mem, unsigned long long *free_mem);
 
 /* -------------------------------------------------------------- */
 

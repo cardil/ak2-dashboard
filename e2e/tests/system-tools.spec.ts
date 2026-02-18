@@ -169,20 +169,24 @@ test.describe('System Tools Page - File Browser', () => {
   test('should navigate into directories', async ({ page }) => {
     const fileBrowserCard = page.locator('text=File Browser').locator('..');
     
-    // Look for a directory link/button (common directories: printer.cfg, history.txt, etc.)
-    const directoryLinks = fileBrowserCard.locator('a, button').filter({ hasText: /webfs|printer|history/i });
+    // Look for a directory button (e.g., profiles)
+    const directoryLinks = fileBrowserCard.locator('button').filter({ hasText: /profiles/i });
     const linkCount = await directoryLinks.count();
     
     if (linkCount > 0) {
-      // Click first directory
+      // Click directory
       await directoryLinks.first().click();
       
       // Wait for navigation
       await page.waitForTimeout(500);
       
-      // Path should have changed
-      const breadcrumb = fileBrowserCard.locator('.breadcrumb, [class*="path"]');
-      await expect(breadcrumb).toBeVisible();
+      // Navigation happened: path separator "»" should appear in breadcrumb
+      const pathSeparator = fileBrowserCard.locator('span.path-separator');
+      await expect(pathSeparator).toBeVisible();
+      
+      // Also ".." go-up button should appear
+      const goUpButton = fileBrowserCard.getByRole('button', { name: '..' });
+      await expect(goUpButton).toBeVisible();
     }
   });
 
@@ -190,15 +194,15 @@ test.describe('System Tools Page - File Browser', () => {
     const fileBrowserCard = page.locator('text=File Browser').locator('..');
     
     // Navigate into a directory first
-    const directoryLinks = fileBrowserCard.locator('a, button').filter({ hasText: /webfs/i });
+    const directoryLinks = fileBrowserCard.locator('button').filter({ hasText: /profiles/i });
     const linkCount = await directoryLinks.count();
     
     if (linkCount > 0) {
       await directoryLinks.first().click();
       await page.waitForTimeout(500);
       
-      // Should have up/back button
-      const upButton = fileBrowserCard.getByRole('button', { name: /up|back|parent/i });
+      // Should have ".." go-up button
+      const upButton = fileBrowserCard.getByRole('button', { name: '..' });
       await expect(upButton).toBeVisible();
     }
   });
