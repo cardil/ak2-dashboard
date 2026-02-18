@@ -183,12 +183,10 @@ Open source project. Check individual files for specific licenses. Built on WEBF
 <details>
 <summary>Click to view more screenshots</summary>
 
-![Dashboard](images/screenshot1.png)
-![Bed Mesh Leveling](images/screenshot2.png)
-![3D Visualization](images/screenshot3.png)
-![System Tools](images/screenshot4.png)
-![File Browser](images/screenshot5.png)
-![Printer Controls](images/screenshot6.png)
+![Dashboard & Printer Controls](images/screenshot1.png)
+![Bed Mesh Leveling & 3D Visualization](images/screenshot2.png)
+![System Tools & File Browser](images/screenshot3.png)
+![Bundled Docs](images/screenshot4.png)
 
 </details>
 
