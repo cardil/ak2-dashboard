@@ -1932,10 +1932,11 @@ void parse_request(struct REQUEST *req) {
 
     // process the custom pages
     if (strncmp(req->path, "/api/", 5) == 0) {
-        // Check if it's a profiles, security, or system API route
+        // Check if it's a profiles, security, system, or webserver API route
         if (strncmp(req->path, "/api/profiles", 13) == 0 ||
             strncmp(req->path, "/api/security", 13) == 0 ||
-            strncmp(req->path, "/api/system", 11) == 0) {
+            strncmp(req->path, "/api/system", 11) == 0 ||
+            strcmp(req->path, "/api/webserver") == 0) {
             handle_api_request(req, filename);
             return; // API request handled, don't continue with file serving
         }

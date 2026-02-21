@@ -89,7 +89,7 @@ function createPrinterStore() {
     }
 
     if (!config) {
-      kobraConnectionStore.set("initializing")
+      kobraConnectionStore.set("unavailable")
       return
     }
 
