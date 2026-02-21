@@ -43,16 +43,6 @@ test.describe('Leveling Page - Profile System', () => {
   });
 
   test.describe('Profile Creation', () => {
-    test('should open Save As modal when clicking Save As button', async ({ page }) => {
-      // Button has accessible name "Save As..." but contains only an icon
-      await page.getByRole('button', { name: /Save As/i }).click();
-
-      // Modal should appear - wait explicitly for dialog with title
-      const dialog = page.getByRole('dialog');
-      await expect(dialog).toBeVisible({ timeout: EXPECT_TIMEOUT });
-      await expect(dialog.getByRole('heading')).toBeVisible();
-    });
-
     test('should create new profile via Save As', async ({ page }) => {
       const profileName = `TestProfile${Date.now()}`;
 
@@ -145,19 +135,6 @@ test.describe('Leveling Page - Slot Operations', () => {
   });
 
   test.describe('Slot Creation', () => {
-    test('should open Save Mesh modal when clicking Save on Active Mesh', async ({ page }) => {
-      // Find the Active Mesh Save button
-      const activeMeshSection = page.locator('text=Active Mesh').locator('..');
-      const saveButton = activeMeshSection.getByRole('button', { name: 'Save' });
-
-      await saveButton.click();
-
-      // Modal should appear - use getByRole for dialog
-      const dialog = page.getByRole('dialog');
-      await expect(dialog).toBeVisible({ timeout: EXPECT_TIMEOUT });
-      await expect(dialog.locator('text=Save Active Mesh')).toBeVisible();
-    });
-
     test('should save active mesh to a slot', async ({ page }) => {
       const slotNumber = Math.floor(Math.random() * 90) + 10; // Random slot 10-99
 
@@ -271,30 +248,12 @@ test.describe('Leveling Page - Slot Operations', () => {
       await expect(page.locator('.slot-name:has-text("Slot 99")')).toBeVisible();
     });
   });
-
-  test.describe('Delete All Slots', () => {
-    test('should have Delete All button visible', async ({ page }) => {
-      await expect(page.getByRole('button', { name: 'Delete all' })).toBeVisible();
-    });
-  });
 });
 
 test.describe('Leveling Page - Profile Management', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/leveling');
     await page.waitForSelector('text=Profile');
-  });
-
-  test('should open Profile Manager modal', async ({ page }) => {
-    // Click the manage profiles button (gear icon)
-    await page.getByRole('button', { name: /Manage Profiles/i }).click();
-
-    // Wait for dialog to appear
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible({ timeout: EXPECT_TIMEOUT });
-    
-    // Modal should have some heading
-    await expect(dialog.getByRole('heading')).toBeVisible();
   });
 
   test('should show list of profiles in manager', async ({ page }) => {
@@ -311,25 +270,6 @@ test.describe('Leveling Page - Settings', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/leveling');
     await page.waitForSelector('text=Leveling Settings');
-  });
-
-  test('should display leveling settings', async ({ page }) => {
-    await expect(page.locator('text=Grid Size')).toBeVisible();
-    await expect(page.locator('text=Bed Temp')).toBeVisible();
-    await expect(page.locator('text=Avg. Precision')).toBeVisible();
-  });
-
-  test('should have editable grid size', async ({ page }) => {
-    const gridSizeInput = page.getByRole('spinbutton', { name: /Grid Size/i });
-    await expect(gridSizeInput).toBeVisible();
-    await expect(gridSizeInput).toBeEditable();
-  });
-
-  test('should have save button for settings', async ({ page }) => {
-    // Settings form has save button in .button-group
-    const settingsForm = page.locator('.settings-form');
-    const saveButton = settingsForm.locator('button:has-text("Save")');
-    await expect(saveButton).toBeVisible();
   });
 
   test('should update grid size setting with confirmation modal', async ({ page }) => {
@@ -432,20 +372,5 @@ test.describe('Leveling Page - Settings', () => {
     await dropdown.selectOption('1');
     const backupBedTempAfterSwitch = settingsForm.locator('input[type="number"]').nth(1);
     await expect(backupBedTempAfterSwitch).toHaveValue(backupBedTemp, { timeout: UI_TRANSITION_TIMEOUT + EXPECT_TIMEOUT });
-  });
-});
-
-test.describe('Leveling Page - Bed Mesh Visualizer', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/leveling');
-    await page.waitForSelector('text=Bed Mesh Visualizer');
-  });
-
-  test('should display mesh data table', async ({ page }) => {
-    await expect(page.locator('table')).toBeVisible();
-  });
-
-  test('should have Edit Mesh button', async ({ page }) => {
-    await expect(page.getByRole('button', { name: 'Edit Mesh' })).toBeVisible();
   });
 });

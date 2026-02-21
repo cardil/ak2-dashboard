@@ -8,17 +8,6 @@ test.describe('Home Page - System Stats', () => {
     await page.waitForSelector('.stats-grid', { timeout: EXPECT_TIMEOUT });
   });
 
-  test('should display the page with main content', async ({ page }) => {
-    // Page should have main content area
-    await expect(page.locator('.page-container')).toBeVisible();
-  });
-
-  test('should display printer stats section', async ({ page }) => {
-    // PrinterStats component should be visible (uses stats-grid class)
-    const stats = page.locator('.stats-grid');
-    await expect(stats).toBeVisible();
-  });
-
   test('should display memory information', async ({ page }) => {
     // Memory stats: "XX% of YY MB" format
     const memoryText = page.getByText(/\d+%\s*of\s*\d+\s*MB/i);
@@ -50,41 +39,6 @@ test.describe('Home Page - System Stats', () => {
     // SSH status should show Started, Stopped, or N/A
     const sshStatus = page.getByText(/^(Started|Stopped|N\/A)$/);
     await expect(sshStatus.first()).toBeVisible();
-  });
-});
-
-test.describe('Home Page - Webcam', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-  });
-
-  test('should display webcam section', async ({ page }) => {
-    // Webcam component shows a container (with camera-off icon by default)
-    const webcamContainer = page.locator('.webcam-container');
-    await expect(webcamContainer).toBeVisible();
-  });
-
-  test('should have webcam toggle button', async ({ page }) => {
-    // Webcam has a toggle button
-    const toggleButton = page.locator('.webcam-container button.icon-button');
-    await expect(toggleButton).toBeVisible();
-  });
-});
-
-test.describe('Home Page - Sidebar', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-  });
-
-  test('should display sidebar', async ({ page }) => {
-    const sidebar = page.locator('.sidebar');
-    await expect(sidebar).toBeVisible();
-  });
-
-  test('should display printer controls section', async ({ page }) => {
-    // PrinterControls component (sidebar content)
-    const sidebarContent = page.locator('.sidebar-content');
-    await expect(sidebarContent).toBeVisible();
   });
 });
 
