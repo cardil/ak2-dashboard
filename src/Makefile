@@ -78,7 +78,9 @@ docker-image: ## Build container image for cross-compilation
 		echo "$(CROSS) Error: Neither docker nor podman found in PATH"; \
 		exit 1; \
 	fi
+	@$(CURDIR)/../scripts/pull-base-images.sh $(DOCKER_PLATFORM) build.Dockerfile
 	@$(DOCKER) build \
+		--pull=never \
 		--platform $(DOCKER_PLATFORM) \
 		-t $(DOCKER_IMAGE) \
 		-f build.Dockerfile .

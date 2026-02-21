@@ -28,7 +28,12 @@ E2E_SOURCES := $(shell find $(ROOT_DIR)/src -type f \( -name '*.c' -o -name '*.h
 	$(shell find tests -name '*.ts' 2>/dev/null) \
 	$(shell find config -type f 2>/dev/null) \
 	$(shell find scripts -type f 2>/dev/null) \
-	Dockerfile compose.yml Makefile
+	Dockerfile Makefile
+
+# E2E testbed configuration
+E2E_IMAGE := localhost/e2e_printer-testbed:latest
+E2E_CONTAINER := ak2-testbed
+E2E_PLATFORM := linux/arm/v7
 
 # E2E testbed ports
 E2E_SSH_PORT ?= 20022
@@ -40,19 +45,45 @@ E2E_HTTP_PORT ?= 20080
 E2E_GEN_MESH_CMD ?= sshpass -p 'toor' ssh -o StrictHostKeyChecking=no \
 	-o UserKnownHostsFile=/dev/null -p $(E2E_SSH_PORT) root@localhost '/opt/scripts/gen-bed-mesh.sh'
 
-.PHONY: up down deploy gen-mesh clean test test-ui test-debug test-headed init help all-clean
+.PHONY: up down deploy gen-mesh clean test test-ui test-debug test-headed init help all-clean \
+	build-image
 
-up: ## Start the E2E testbed container
+build-image: ## Build the E2E testbed container image
 	@echo ""
-	@echo "$(BLUE)➜ Starting E2E Testbed...$(NC)"
+	@echo "$(BLUE)➜ Building E2E testbed image...$(NC)"
 	@if [ -z "$(DOCKER)" ]; then \
 		echo "$(CROSS) Error: Neither docker nor podman found in PATH"; \
 		exit 1; \
 	fi
-	@$(DOCKER) compose up -d --build
+	@$(ROOT_DIR)/scripts/pull-base-images.sh $(E2E_PLATFORM) Dockerfile
+	@$(DOCKER) build \
+		--pull=never \
+		--platform $(E2E_PLATFORM) \
+		-t $(E2E_IMAGE) \
+		-f Dockerfile \
+		$(ROOT_DIR)
+	@echo "$(TICK) E2E testbed image built"
+
+up: build-image ## Start the E2E testbed container
+	@echo ""
+	@echo "$(BLUE)➜ Starting E2E Testbed...$(NC)"
+	@$(DOCKER) run --rm -d --replace \
+		--name $(E2E_CONTAINER) \
+		--hostname printer-testbed \
+		--platform $(E2E_PLATFORM) \
+		--publish $(E2E_SSH_PORT):22 \
+		--publish $(E2E_HTTP_PORT):80 \
+		--memory 110m \
+		--memory-swap -1 \
+		--health-cmd '/healthcheck.sh' \
+		--health-interval 1s \
+		--health-timeout 1s \
+		--health-retries 5 \
+		--health-start-period 2s \
+		$(E2E_IMAGE)
 	@printf "$(INFO) Waiting for testbed to be ready"
 	@for i in $$(seq 1 30); do \
-		status="$$($(DOCKER) container inspect --format '{{.State.Health.Status}}' ak2-testbed 2>/dev/null)"; \
+		status="$$($(DOCKER) container inspect --format '{{.State.Health.Status}}' $(E2E_CONTAINER) 2>/dev/null)"; \
 		if [ "$$status" = "healthy" ]; then \
 			break; \
 		fi; \
@@ -60,7 +91,7 @@ up: ## Start the E2E testbed container
 		sleep 1; \
 	done
 	@echo ""
-	@status="$$($(DOCKER) container inspect --format '{{.State.Health.Status}}' ak2-testbed 2>/dev/null)"; \
+	@status="$$($(DOCKER) container inspect --format '{{.State.Health.Status}}' $(E2E_CONTAINER) 2>/dev/null)"; \
 	if [ "$$status" != "healthy" ]; then \
 		echo "$(CROSS) E2E Testbed health check failed (status: $$status)"; \
 		exit 1; \
@@ -75,7 +106,7 @@ up: ## Start the E2E testbed container
 down: ## Stop and remove the E2E testbed container
 	@echo ""
 	@echo "$(BLUE)➜ Stopping E2E Testbed...$(NC)"
-	@$(DOCKER) compose down
+	@$(DOCKER) stop $(E2E_CONTAINER) 2>/dev/null || true
 	@echo "$(TICK) E2E Testbed stopped"
 	@echo ""
 
@@ -92,11 +123,12 @@ gen-mesh: ## Generate bed mesh points in testbed (simulates leveling)
 	@$(E2E_GEN_MESH_CMD)
 	@echo ""
 
-clean: ## Stop testbed and remove volumes
+clean: ## Stop testbed and remove image
 	@echo ""
 	@echo "$(BLUE)➜ Cleaning E2E Testbed...$(NC)"
-	@$(DOCKER) compose down -v
-	@rm -rf volumes node_modules
+	@$(DOCKER) stop $(E2E_CONTAINER) 2>/dev/null || true
+	@$(DOCKER) rmi $(E2E_IMAGE) 2>/dev/null || true
+	@rm -rf node_modules
 	@rm -f $(E2E_ALL_STAMP)
 	@echo "$(TICK) E2E Testbed cleaned"
 	@echo ""
