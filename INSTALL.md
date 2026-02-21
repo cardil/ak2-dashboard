@@ -162,8 +162,7 @@ cp -r opt/* /opt/
 cp -r mnt/* /mnt/
 
 # Restart webserver
-killall webfsd
-/opt/bin/webfsd -p 80 -r /mnt/UDISK/webfs
+/opt/bin/webfsd-runner
 ```
 
 ---
@@ -186,8 +185,7 @@ ps | grep webfsd
 **Restart webserver manually:**
 ```bash
 ssh root@PRINTER_IP
-killall webfsd
-/opt/bin/webfsd -p 80 -r /mnt/UDISK/webfs
+/opt/bin/webfsd-runner
 ```
 
 ### Can't Access via SSH
@@ -368,8 +366,8 @@ Add Kobra Unleashed URL:
 > - All features accessible without password
 >
 > **HTTP Basic Authentication (Enterprise/Campus):**
-> - Add `-b user:pass` flag to webfsd startup
-> - Example: `/opt/bin/webfsd -p 80 -b admin:securepass -r /mnt/UDISK/webfs`
+> - Add `-b user:pass` to `/etc/webfs/webfsd.conf` and restart via `webfsd-runner`
+> - Example entry in `webfsd.conf`: `-b admin:securepass`
 > - Protects ALL content: static files, API endpoints, and dashboard features
 > - Authentication check happens before ANY request processing
 >

@@ -306,8 +306,7 @@ To verify your configuration:
 
 **Restart Webserver**
 - SSH into printer
-- `killall webfsd`
-- `/opt/bin/webfsd` (restart manually)
+- `/opt/bin/webfsd-runner` (restart via wrapper script)
 
 ### Webcam Not Working
 
