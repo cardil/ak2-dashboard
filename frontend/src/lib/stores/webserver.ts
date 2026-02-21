@@ -12,7 +12,7 @@ function createWebserverStore() {
 
   async function fetchConfig() {
     try {
-      let url = "/api/webserver.json"
+      let url = "/api/webserver"
       if (browser) {
         const params = new URLSearchParams(window.location.search)
         if (params.has("api_url")) {

@@ -162,6 +162,12 @@ void handle_api_request(struct REQUEST *req, char *filename) {
     return;
   }
 
+  // GET /api/webserver - Get webserver configuration
+  if (strcmp(req->path, "/api/webserver") == 0 && strcmp(req->type, "GET") == 0) {
+    handle_get_webserver(req);
+    return;
+  }
+
   // Fallback for unknown endpoints
   snprintf(api_response_buffer, sizeof(api_response_buffer),
           "{\"status\": \"error\", \"message\": \"API endpoint not found\"}");
@@ -411,6 +417,53 @@ void handle_post_system_log_clear(struct REQUEST *req) {
           "{\"status\": \"success\", \"message\": \"Log cleared\"}");
   req->body = api_response_buffer;
   req->lbody = strlen(api_response_buffer);
+  req->mime = "application/json";
+  mkheader(req, 200);
+}
+
+// GET /api/webserver - Read webserver config from /etc/webfs/webserver.json at request time
+void handle_get_webserver(struct REQUEST *req) {
+  const char *config_path = "/etc/webfs/webserver.json";
+  FILE *fp = fopen(config_path, "r");
+  if (!fp) {
+    LOG("webserver config not found: %s\n", config_path);
+    snprintf(api_response_buffer, sizeof(api_response_buffer),
+            "{\"status\": \"error\", \"message\": \"webserver.json not found\"}");
+    req->body = api_response_buffer;
+    req->lbody = strlen(api_response_buffer);
+    req->mime = "application/json";
+    mkheader(req, 404);
+    return;
+  }
+
+  // Read file content (max buffer size)
+  size_t total_read = 0;
+  int ch;
+  while ((ch = fgetc(fp)) != EOF && total_read < sizeof(api_response_buffer) - 1) {
+    api_response_buffer[total_read++] = (char)ch;
+  }
+  api_response_buffer[total_read] = '\0';
+  fclose(fp);
+
+  // Validate it's parseable JSON
+  jsmn_parser parser;
+  jsmntok_t tokens[32];
+  jsmn_init(&parser);
+  int token_count = jsmn_parse(&parser, api_response_buffer, total_read, tokens, 32);
+  if (token_count < 1) {
+    LOG("Failed to parse webserver.json\n");
+    snprintf(api_response_buffer, sizeof(api_response_buffer),
+            "{\"status\": \"error\", \"message\": \"Failed to parse webserver.json\"}");
+    req->body = api_response_buffer;
+    req->lbody = strlen(api_response_buffer);
+    req->mime = "application/json";
+    mkheader(req, 500);
+    return;
+  }
+
+  // Return raw file bytes as-is
+  req->body = api_response_buffer;
+  req->lbody = total_read;
   req->mime = "application/json";
   mkheader(req, 200);
 }

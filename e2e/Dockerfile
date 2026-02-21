@@ -71,6 +71,7 @@ COPY e2e/scripts/gen-bed-mesh.sh /opt/scripts/gen-bed-mesh.sh
 # Copy E2E webfsd config overrides (base config comes from webserver.zip during deploy)
 COPY e2e/config/webfs/webfsd.conf.d/99-e2e.conf /etc/webfs/webfsd.conf.d/99-e2e.conf
 COPY e2e/config/webfs/env.d/00-glibc.env /etc/webfs/env.d/00-glibc.env
+COPY e2e/config/webfs/webserver.json /etc/webfs/webserver.json
 
 # Make scripts executable
 RUN chmod +x /entrypoint.sh \

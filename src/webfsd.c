@@ -295,10 +295,6 @@ static void create_root_doc_if_required(void) {
     if (!file_exists("/opt/webfs/init_done")) {
         system("touch /opt/webfs/init_done");
     }
-    // copy printer's config if exists
-    if (file_exists("/etc/webfs/webserver.json")) {
-        system("cp /etc/webfs/webserver.json /mnt/UDISK/webfs/api/webserver.json");
-    }
     return;
 }
 

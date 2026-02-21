@@ -10,5 +10,6 @@ void handle_post_system_reboot(struct REQUEST *req);
 void handle_post_system_poweroff(struct REQUEST *req);
 void handle_post_system_ssh(struct REQUEST *req);
 void handle_post_system_log_clear(struct REQUEST *req);
+void handle_get_webserver(struct REQUEST *req);
 
 #endif /* API_H */
