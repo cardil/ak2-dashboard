@@ -22,8 +22,9 @@ generate_mesh_points() {
     center_x2=$((grid_size - 1))  # center * 2 to avoid floats
 
     # Get all random bytes at once (2 bytes per point for variation)
+    # Use hexdump instead of od (od is not available in BusyBox)
     if [ -r /dev/urandom ]; then
-        rand_hex=$(od -An -tx1 -N$((total_points * 2)) /dev/urandom | tr -d ' \n')
+        rand_hex=$(hexdump -v -e '1/1 "%02x"' -n $((total_points * 2)) /dev/urandom 2>/dev/null)
     else
         rand_hex=""
     fi
