@@ -807,8 +807,30 @@ static int read_u64_from_file(const char *path, U64 *value) {
     return 0;
 }
 
-// Get memory info, preferring cgroup v2 files for container awareness
-// Falls back to sysinfo() if cgroup files are not available
+// Read a named U64 value from a cgroup memory.stat file (e.g. "inactive_file")
+// Returns 0 on success, -1 on failure
+static int read_u64_from_stat(const char *path, const char *key, U64 *value) {
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+    char line[128];
+    size_t key_len = strlen(key);
+    int found = -1;
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, key, key_len) == 0 && line[key_len] == ' ') {
+            *value = strtoull(line + key_len + 1, NULL, 10);
+            found = 0;
+            break;
+        }
+    }
+    fclose(f);
+    return found;
+}
+
+// Get memory info, preferring cgroup v2 files for container awareness.
+// For cgroup path: subtracts inactive_file from memory.current so that
+// reclaimable page cache is not counted as "used" memory.
+// For bare metal: reads MemAvailable from /proc/meminfo (preferred) which
+// accounts for buffers and cache, falling back to MemTotal-MemFree-Buffers-Cached.
 void get_memory_info(U64 *total_mem, U64 *free_mem) {
     U64 cgroup_max = 0;
     U64 cgroup_current = 0;
@@ -818,15 +840,40 @@ void get_memory_info(U64 *total_mem, U64 *free_mem) {
     int has_current = (read_u64_from_file("/sys/fs/cgroup/memory.current", &cgroup_current) == 0);
 
     if (has_max && has_current && cgroup_max > 0) {
-        // We have valid cgroup limits - use them
+        // Subtract inactive_file (reclaimable page cache) from current usage.
+        // This matches what the kernel reports as "available" in cgroup context.
+        U64 inactive_file = 0;
+        read_u64_from_stat("/sys/fs/cgroup/memory.stat", "inactive_file", &inactive_file);
+        U64 used = (cgroup_current > inactive_file) ? (cgroup_current - inactive_file) : 0;
         *total_mem = cgroup_max;
-        *free_mem = (cgroup_max > cgroup_current) ? (cgroup_max - cgroup_current) : 0;
+        *free_mem = (cgroup_max > used) ? (cgroup_max - used) : 0;
     } else {
-        // Fall back to sysinfo for bare metal
-        struct sysinfo s_info;
-        if (sysinfo(&s_info) == 0) {
-            *total_mem = (U64)s_info.totalram * (U64)s_info.mem_unit;
-            *free_mem = (U64)s_info.freeram * (U64)s_info.mem_unit;
+        // Fall back to /proc/meminfo for bare metal.
+        // Prefer MemAvailable (accounts for buffers/cache); fall back to
+        // MemTotal - MemFree - Buffers - Cached if MemAvailable is absent.
+        FILE *fp = fopen("/proc/meminfo", "r");
+        if (fp) {
+            U64 mem_total = 0, mem_free = 0, mem_available = 0;
+            U64 buffers = 0, cached = 0;
+            int has_available = 0;
+            char line[128];
+            while (fgets(line, sizeof(line), fp)) {
+                unsigned long long val = 0;
+                if (sscanf(line, "MemTotal: %llu kB", &val) == 1)       mem_total = val * 1024;
+                else if (sscanf(line, "MemFree: %llu kB", &val) == 1)   mem_free = val * 1024;
+                else if (sscanf(line, "MemAvailable: %llu kB", &val) == 1) { mem_available = val * 1024; has_available = 1; }
+                else if (sscanf(line, "Buffers: %llu kB", &val) == 1)   buffers = val * 1024;
+                else if (sscanf(line, "Cached: %llu kB", &val) == 1)    cached = val * 1024;
+            }
+            fclose(fp);
+            *total_mem = mem_total;
+            if (has_available) {
+                *free_mem = mem_available;
+            } else {
+                U64 used = mem_total > (mem_free + buffers + cached)
+                  ? mem_total - mem_free - buffers - cached : 0;
+                *free_mem = mem_total > used ? mem_total - used : 0;
+            }
         } else {
             *total_mem = 0;
             *free_mem = 0;
