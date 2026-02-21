@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { EXPECT_TIMEOUT } from './config';
 
 test.describe('Home Page - System Stats', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    // Wait for /api/system to load and render
-    await page.waitForTimeout(1000);
+    // Wait for stats grid to load (indicates API data is ready)
+    await page.waitForSelector('.stats-grid', { timeout: EXPECT_TIMEOUT });
   });
 
   test('should display the page with main content', async ({ page }) => {
@@ -110,7 +111,8 @@ test.describe('Home Page - API Integration', () => {
     
     // Navigate to the page
     await page.goto('/');
-    await page.waitForTimeout(1500);
+    // Wait for stats grid to ensure data is loaded
+    await page.waitForSelector('.stats-grid', { timeout: EXPECT_TIMEOUT });
     
     // The SSH status from API should appear on the page
     const expectedSshStatus = data.ssh_status == 2 ? 'Started' : data.ssh_status == 1 ? 'Stopped' : 'N/A';

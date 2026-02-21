@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { fetchLogTail } from './helpers';
+import { EXPECT_TIMEOUT, SERVICE_OPERATION_TIMEOUT, UI_TRANSITION_TIMEOUT, LOG_REFRESH_TIMEOUT } from './config';
 
 /**
  * E2E Tests for the System Tools Page
@@ -13,7 +14,7 @@ test.describe('System Tools Page - Security', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/system-tools');
     // Wait for any card to load
-    await page.waitForSelector('.card, [class*="card"]', { timeout: 10000 });
+    await page.waitForSelector('.card, [class*="card"]', { timeout: EXPECT_TIMEOUT });
   });
 
   test('should display security card', async ({ page }) => {
@@ -48,16 +49,15 @@ test.describe('System Tools Page - Security', () => {
     // Click change button
     await securityCard.getByRole('button', { name: /change/i }).click();
     
-    // Wait for password change to complete
-    await page.waitForTimeout(2000);
+    // Wait for inputs to be cleared (indicating success)
+    await expect(passwordInput).toHaveValue('', { timeout: SERVICE_OPERATION_TIMEOUT + EXPECT_TIMEOUT });
     
     // Check that no error message is displayed
     const errorMessage = page.getByText(/failed to change/i);
     await expect(errorMessage).not.toBeVisible();
     
-    // Verify the form is still visible and inputs are cleared (indicating success)
+    // Verify the form is still visible
     await expect(passwordInput).toBeVisible();
-    await expect(passwordInput).toHaveValue('');
     
     // Fetch the printer log to verify the success message
     const logTail = await fetchLogTail(page.request);
@@ -83,7 +83,7 @@ test.describe('System Tools Page - Security', () => {
 test.describe('System Tools Page - Services', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/system-tools');
-    await page.waitForSelector('.card, [class*="card"]', { timeout: 10000 });
+    await page.waitForSelector('.card, [class*="card"]', { timeout: EXPECT_TIMEOUT });
   });
 
   test('should display services card', async ({ page }) => {
@@ -128,17 +128,13 @@ test.describe('System Tools Page - Services', () => {
       const restartButton = servicesCard.getByRole('button', { name: /^Restart$/i });
       await restartButton.click();
       
-      // Wait for restart to complete
-      await page.waitForTimeout(2000);
-      
       // SSH should still be running after restart
-      await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: 5000 });
+      await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: SERVICE_OPERATION_TIMEOUT + EXPECT_TIMEOUT });
     } else {
       // If SSH is stopped, start it first
       const startButton = servicesCard.getByRole('button', { name: /^Start$/i });
       await startButton.click();
-      await page.waitForTimeout(2000);
-      await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: 5000 });
+      await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: SERVICE_OPERATION_TIMEOUT + EXPECT_TIMEOUT });
     }
   });
 
@@ -153,7 +149,7 @@ test.describe('System Tools Page - Services', () => {
     if (initialRunning === 0) {
       const startBtn = servicesCard.getByRole('button', { name: /^Start$/i });
       await startBtn.click();
-      await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: 10000 });
+      await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: SERVICE_OPERATION_TIMEOUT + EXPECT_TIMEOUT });
     }
     
     // Step 1: Stop SSH
@@ -161,21 +157,21 @@ test.describe('System Tools Page - Services', () => {
     await stopButton.click();
     
     // Step 2: Verify state changed to Stopped
-    await expect(servicesCard.locator('text=Stopped')).toBeVisible({ timeout: 10000 });
+    await expect(servicesCard.locator('text=Stopped')).toBeVisible({ timeout: SERVICE_OPERATION_TIMEOUT + EXPECT_TIMEOUT });
     
     // Step 3: Start SSH
     const startButton = servicesCard.getByRole('button', { name: /^Start$/i });
     await startButton.click();
     
     // Step 4: Verify state changed to Running
-    await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: 10000 });
+    await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: SERVICE_OPERATION_TIMEOUT + EXPECT_TIMEOUT });
   });
 });
 
 test.describe('System Tools Page - File Browser', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/system-tools');
-    await page.waitForSelector('.card, [class*="card"]', { timeout: 10000 });
+    await page.waitForSelector('.card, [class*="card"]', { timeout: EXPECT_TIMEOUT });
   });
 
   test('should display file browser card', async ({ page }) => {
@@ -216,12 +212,9 @@ test.describe('System Tools Page - File Browser', () => {
       // Click directory
       await directoryLinks.first().click();
       
-      // Wait for navigation
-      await page.waitForTimeout(500);
-      
-      // Navigation happened: path separator "»" should appear in breadcrumb
+      // Wait for navigation - path separator should appear
       const pathSeparator = fileBrowserCard.locator('span.path-separator');
-      await expect(pathSeparator).toBeVisible();
+      await expect(pathSeparator).toBeVisible({ timeout: UI_TRANSITION_TIMEOUT + EXPECT_TIMEOUT });
       
       // Also ".." go-up button should appear
       const goUpButton = fileBrowserCard.getByRole('button', { name: '..' });
@@ -238,11 +231,10 @@ test.describe('System Tools Page - File Browser', () => {
     
     if (linkCount > 0) {
       await directoryLinks.first().click();
-      await page.waitForTimeout(500);
       
       // Should have ".." go-up button
       const upButton = fileBrowserCard.getByRole('button', { name: '..' });
-      await expect(upButton).toBeVisible();
+      await expect(upButton).toBeVisible({ timeout: UI_TRANSITION_TIMEOUT + EXPECT_TIMEOUT });
     }
   });
 });
@@ -250,7 +242,7 @@ test.describe('System Tools Page - File Browser', () => {
 test.describe('System Tools Page - Printer Log', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/system-tools');
-    await page.waitForSelector('.card, [class*="card"]', { timeout: 10000 });
+    await page.waitForSelector('.card, [class*="card"]', { timeout: EXPECT_TIMEOUT });
   });
 
   test('should display printer log card', async ({ page }) => {
@@ -278,14 +270,15 @@ test.describe('System Tools Page - Printer Log', () => {
     
     // Get initial log content
     const logViewer = logCard.locator('pre, code, textarea, [class*="log"]').first();
+    await logViewer.waitFor({ state: 'visible', timeout: EXPECT_TIMEOUT });
     const initialContent = await logViewer.textContent();
     
     // Click refresh
     const refreshButton = logCard.getByRole('button', { name: /refresh|reload/i });
     await refreshButton.click();
     
-    // Wait for refresh
-    await page.waitForTimeout(1000);
+    // Wait a brief moment for the refresh to trigger
+    await page.waitForTimeout(LOG_REFRESH_TIMEOUT);
     
     // Content should be loaded (may be same or different)
     const newContent = await logViewer.textContent();
@@ -298,7 +291,7 @@ test.describe('System Tools Page - Printer Log', () => {
     // Refresh log to ensure we have latest content
     const refreshButton = logCard.getByRole('button', { name: /refresh|reload/i });
     await refreshButton.click();
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(LOG_REFRESH_TIMEOUT);
     
     // Log should contain webfsd startup message
     const logViewer = logCard.locator('pre, code, textarea, [class*="log"]').first();
@@ -327,17 +320,14 @@ test.describe('System Tools Page - Printer Log', () => {
       const restartButton = servicesCard.getByRole('button', { name: /^Restart$/i });
       await restartButton.click();
       
-      // Wait for restart to complete
-      await page.waitForTimeout(2000);
-      
-      // Verify SSH is still running
-      await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: 5000 });
+      // Verify SSH is still running after restart
+      await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: SERVICE_OPERATION_TIMEOUT + EXPECT_TIMEOUT });
       
       // Refresh log
       const logCard = page.locator('text=Printer Log').locator('..');
       const refreshButton = logCard.getByRole('button', { name: /refresh|reload/i });
       await refreshButton.click();
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(LOG_REFRESH_TIMEOUT);
       
       // Log should contain SSH restart message
       const logViewer = logCard.locator('pre, code, textarea, [class*="log"]').first();
@@ -357,7 +347,7 @@ test.describe('System Tools Page - Printer Log', () => {
 test.describe('System Tools Page - System Info', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/system-tools');
-    await page.waitForSelector('.card, [class*="card"]', { timeout: 10000 });
+    await page.waitForSelector('.card, [class*="card"]', { timeout: EXPECT_TIMEOUT });
   });
 
   test('should display system card', async ({ page }) => {
