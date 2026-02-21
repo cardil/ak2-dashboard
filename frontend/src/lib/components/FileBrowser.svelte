@@ -168,7 +168,7 @@
           If directory listing is disabled with the <code>-j</code> flag in
           webfsd configuration, the file browser will not be functional. Remove
           the <code>-j</code> flag from
-          <code>/etc/webfsd/webfsd.conf</code> to enable file browsing.
+          <code>/etc/webfs/webfsd.conf</code> to enable file browsing.
         </p>
       </div>
     {/if}

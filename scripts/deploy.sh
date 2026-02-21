@@ -88,8 +88,8 @@ if ! ${SSH_CMD} -p "${PRINTER_PORT}" "${PRINTER_USER}@${PRINTER_IP}" "
     rm -f webserver.zip &&
     
     # Update port in config if different from default
-    if ! grep -q '^-p ${WEBFSD_PORT}\$' /etc/webfsd/webfsd.conf 2>/dev/null; then
-        sed -i 's/^-p [0-9]*\$/-p ${WEBFSD_PORT}/' /etc/webfsd/webfsd.conf
+    if ! grep -q '^-p ${WEBFSD_PORT}\$' /etc/webfs/webfsd.conf 2>/dev/null; then
+        sed -i 's/^-p [0-9]*\$/-p ${WEBFSD_PORT}/' /etc/webfs/webfsd.conf
     fi &&
     
     # Pass WEBFSD_DEBUG to runner (one-off debug mode)

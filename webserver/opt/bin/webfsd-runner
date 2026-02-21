@@ -4,8 +4,8 @@
 # Used by both rc.local and deployment scripts
 #
 # Configuration:
-#   /etc/webfsd/webfsd.conf       - main config file
-#   /etc/webfsd/webfsd.conf.d/*.conf - drop-in overrides (sorted alphabetically)
+#   /etc/webfs/webfsd.conf       - main config file
+#   /etc/webfs/webfsd.conf.d/*.conf - drop-in overrides (sorted alphabetically)
 #
 # Config file format:
 #   One option per line. Comment/uncomment to enable/disable.
@@ -26,7 +26,7 @@
 set -e
 
 # Configuration locations
-CONFIG_DIR="${WEBFSD_CONFIG_DIR:-/etc/webfsd}"
+CONFIG_DIR="${WEBFSD_CONFIG_DIR:-/etc/webfs}"
 CONFIG_FILE="${CONFIG_DIR}/webfsd.conf"
 CONFIG_DROP_IN_DIR="${CONFIG_DIR}/webfsd.conf.d"
 ENV_DROP_IN_DIR="${CONFIG_DIR}/env.d"

@@ -37,7 +37,7 @@ RUN mkdir -p /user \
     && mkdir -p /opt/bin \
     && mkdir -p /opt/etc/init.d \
     && mkdir -p /opt/scripts \
-    && mkdir -p /etc/webfsd/webfsd.conf.d \
+    && mkdir -p /etc/webfs/webfsd.conf.d \
     && chmod 755 /user /mnt /opt \
     && chmod 755 /mnt/UDISK
 
@@ -69,8 +69,8 @@ COPY e2e/scripts/poweroff /sbin/poweroff
 COPY e2e/scripts/gen-bed-mesh.sh /opt/scripts/gen-bed-mesh.sh
 
 # Copy E2E webfsd config overrides (base config comes from webserver.zip during deploy)
-COPY e2e/config/webfsd/webfsd.conf.d/99-e2e.conf /etc/webfsd/webfsd.conf.d/99-e2e.conf
-COPY e2e/config/webfsd/env.d/00-glibc.env /etc/webfsd/env.d/00-glibc.env
+COPY e2e/config/webfs/webfsd.conf.d/99-e2e.conf /etc/webfs/webfsd.conf.d/99-e2e.conf
+COPY e2e/config/webfs/env.d/00-glibc.env /etc/webfs/env.d/00-glibc.env
 
 # Make scripts executable
 RUN chmod +x /entrypoint.sh \
