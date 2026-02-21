@@ -271,7 +271,7 @@ function createLogStore() {
     clearLog: async () => {
       if (!browser) return
       try {
-        await fetch("/api/do.json?action=log_clear")
+        await fetch("/api/system/log/clear", { method: "POST" })
         currentPosition = 0
         isPartialLog = false
         fetchLog(false, false)

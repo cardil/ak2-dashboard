@@ -13,12 +13,7 @@ INFO := $(BLUE)ℹ$(NC)
 WARN := $(YELLOW)⚠$(NC)
 ARROW := $(BLUE)➜$(NC)
 
-# Initialization method: set USE_DOCKER=1 for Docker, default is wget
-USE_DOCKER ?= 0
-
-# Cross-compiler configuration
-CROSS_COMPILER_DIR := ./arm-linux-musleabi-cross
-CROSS_COMPILER_URL := https://musl.cc/arm-linux-musleabi-cross.tgz
+# Docker/Podman configuration for glibc cross-compilation
 DOCKER := $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null)
 DOCKER_IMAGE := localhost/arm-cross-cc
 DOCKER_PLATFORM := linux/arm/v7
@@ -28,74 +23,44 @@ JSMN_DIR := ./vendor/jsmn
 JSMN_REPO := https://github.com/zserge/jsmn.git
 JSMN_HEADER := $(JSMN_DIR)/jsmn.h
 
-# Compiler flags (same for both methods)
+# Compiler flags for glibc build with backtrace support
 CFLAGS := -DMIMEFILE=\""/etc/mime.types"\" \
 	-DWEBFS_VERSION=\"1.22\" \
 	-D_GNU_SOURCE \
 	-D_LARGEFILE_SOURCE \
 	-D_LARGEFILE64_SOURCE \
 	-D_FILE_OFFSET_BITS=64 \
-	-I$(JSMN_DIR)
-LDFLAGS := -static
+	-I$(JSMN_DIR) \
+	-g \
+	-funwind-tables \
+	-fno-omit-frame-pointer \
+	-std=gnu99
+# Dynamic linking with glibc (printer already has glibc 2.23 loaded)
+LDFLAGS := -rdynamic -lm -lpthread
 
-# Set compiler based on initialization method
-ifeq ($(USE_DOCKER),1)
-	# Docker method: wrap compiler in container
-	DOCKER_RUN = $(DOCKER) run --rm \
-		--platform $(DOCKER_PLATFORM) \
-		-v "$(CURDIR):/src:Z" \
-		-w /src \
-		$(DOCKER_IMAGE)
-	CC = $(DOCKER_RUN) gcc
-	STRIP = $(DOCKER_RUN) strip
-else
-	# Wget method: use downloaded cross-compiler (default)
-	CC = $(CROSS_COMPILER_DIR)/bin/arm-linux-musleabi-gcc
-	STRIP = $(CROSS_COMPILER_DIR)/bin/arm-linux-musleabi-strip
-endif
+# Docker method: wrap compiler in container
+DOCKER_RUN = $(DOCKER) run --rm \
+	--platform $(DOCKER_PLATFORM) \
+	-v "$(CURDIR):/src:Z" \
+	-w /src \
+	$(DOCKER_IMAGE)
+CC = $(DOCKER_RUN) gcc
 
 SOURCE_FILES := $(wildcard *.c *.h api/*.c api/*.h)
 OBJ := $(patsubst %.c,%.o,$(wildcard *.c)) $(patsubst %.c,%.o,$(wildcard api/*.c))
 TARGET := webfsd
-STRIPPED_TARGET := $(TARGET).stripped
 TARGET_DIR := ../webserver/opt/bin
 TARGET_PATH := $(TARGET_DIR)/$(TARGET)
-STAMP_DIR := .stamps
+STAMP_DIR := ../.stamps
 LINT_STAMP := $(STAMP_DIR)/.lint.stamp
 
 .PHONY: all init build lint compile test clean help \
 	build-only lint-only compile-only test-only \
-	strip export-bin cross-cc clean-cc clean-docker jsmn clean-jsmn
+	export-bin docker-image clean-docker jsmn clean-jsmn
 
 all: build ## Default target (same as build)
 
-# init switches based on USE_DOCKER environment variable
-ifeq ($(USE_DOCKER),1)
-init: docker-image docker-warn jsmn ## Initialize with Docker (EXPERIMENTAL)
-docker-warn:
-	@echo ""
-	@echo "$(WARN) WARNING: Docker build method is EXPERIMENTAL"
-	@echo "$(WARN) Binary built with Alpine ARM gcc (not musl.cc)"
-	@echo "$(WARN) Has NOT been tested on actual printer hardware"
-	@echo "$(WARN) Use wget method for production builds"
-	@echo ""
-else
-init: cross-cc jsmn ## Initialize backend with wget (default)
-endif
-
-cross-cc: $(CROSS_COMPILER_DIR) ## Download cross-compiler (wget method)
-
-$(CROSS_COMPILER_DIR):
-	@echo "$(BLUE)➜ Setting up backend environment...$(NC)"
-ifeq ($(shell uname -s),Linux)
-	@echo "$(INFO) Linux OS detected. Proceeding with cross-compiler download."
-	mkdir -p $(CROSS_COMPILER_DIR)
-	wget -qO- $(CROSS_COMPILER_URL) | tar -xz -C $(CROSS_COMPILER_DIR) --strip-components=1
-	@echo "$(TICK) Cross-compiler downloaded and extracted."
-else
-	@echo "$(CROSS) Error: This build process requires a Linux environment for the cross-compiler."
-	@exit 1
-endif
+init: docker-image jsmn ## Initialize backend with Docker/Podman
 
 jsmn: $(JSMN_HEADER) ## Download jsmn JSON library
 
@@ -130,12 +95,7 @@ docker-build: docker-image ## Build using container (cross-compile for ARM)
 $(TARGET): $(OBJ)
 	@echo "$(BLUE)➜ Linking $@...$(NC)"
 	@$(CC) $(LDFLAGS) -o $@ $^
-	@echo "$(TICK) $@ linked."
-
-$(STRIPPED_TARGET): $(TARGET)
-	@echo "$(BLUE)➜ Stripping $(TARGET)...$(NC)"
-	@$(STRIP) $(TARGET) -o $@
-	@echo "$(TICK) $(TARGET) stripped."
+	@echo "$(TICK) $@ linked (with debug symbols for backtrace support)."
 
 test: compile ## Test the code (runs also: compile, init)
 
@@ -153,36 +113,28 @@ $(LINT_STAMP): $(SOURCE_FILES)
 compile-only: $(TARGET) ## Compile the sources
 compile: lint compile-only ## Compile the sources (runs also: init)
 
-strip: $(STRIPPED_TARGET) ## Strip the binary
-
 %.o: %.c
 	@echo "$(BLUE)➜ Compiling $@...$(NC)"
 	@$(CC) $(CFLAGS) -c $< -o $@
 
+export-bin: $(TARGET) $(TARGET_PATH) ## Export the binary
 
-export-bin: $(STRIPPED_TARGET) $(TARGET_PATH) ## Export the binary
-
-$(TARGET_PATH): strip
+$(TARGET_PATH): $(TARGET)
 	@echo "$(BLUE)➜ Exporting binary to $(TARGET_DIR)...$(NC)"
 	@mkdir -p $(TARGET_DIR)
-	cp -f $(STRIPPED_TARGET) $@
+	cp -f $(TARGET) $@
 	@echo "$(TICK) $(TARGET) exported."
 
-build-only: strip export-bin ## Build the backend (runs: strip, export-bin)
+build-only: export-bin ## Build the backend (runs: export-bin)
 build: compile build-only ## Build the backend (runs also: init, compile)
 
 clean: ## Clean the backend
 	@echo "$(BLUE)➜ Cleaning backend...$(NC)"
 	rm -f $(OBJ) \
 		$(TARGET) \
-		$(STRIPPED_TARGET) \
 		$(TARGET_PATH) \
 		$(LINT_STAMP)
 	rm -rf $(STAMP_DIR)
-
-clean-cc: ## Delete the cross compiler
-	@echo "$(BLUE)➜ Cleaning cross compiler...$(NC)"
-	rm -rf $(CROSS_COMPILER_DIR)
 
 clean-jsmn: ## Delete the jsmn library
 	@echo "$(BLUE)➜ Cleaning jsmn library...$(NC)"

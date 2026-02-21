@@ -19,7 +19,7 @@ services:
     mem_limit: 110m
     memswap_limit: 110m
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "22"]
+      test: ["CMD", "/healthcheck.sh"]
       interval: 1s
       timeout: 1s
       retries: 5

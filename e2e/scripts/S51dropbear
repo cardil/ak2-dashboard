@@ -1,34 +1,63 @@
 #!/bin/sh
-# Dropbear is managed by supervisord, so we use supervisorctl to control it
+# Simulates the real printer's S51dropbear script
+# Uses pgrep -f for process detection (works with qemu emulation)
+
+PATH=/opt/bin:/opt/sbin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Use pgrep -f to find dropbear process (works with qemu-arm-static emulation)
+# In qemu environment, processes appear as "qemu-arm-static /usr/sbin/dropbear ..."
+dropbear_pids()
+{
+    pgrep -f "/usr/sbin/dropbear" 2>/dev/null
+}
+
+dropbear_status()
+{
+    [ -n "$(dropbear_pids)" ]
+}
+
+start()
+{
+    # Use pre-generated host keys from /opt/etc/dropbear
+    dropbear -F -E -p 22 -r /opt/etc/dropbear/dropbear_rsa_host_key -r /opt/etc/dropbear/dropbear_ed25519_host_key &
+}
+
+stop()
+{
+    pids=$(dropbear_pids)
+    if [ -n "$pids" ]; then
+        kill -9 $pids 2>/dev/null || true
+    fi
+}
+
 case "$1" in
-  start)
-    if pidof dropbear > /dev/null; then
-      echo "Dropbear already running"
-    else
-      supervisorctl start dropbear
-      echo "Dropbear started"
-    fi
-    ;;
-  stop)
-    if pidof dropbear > /dev/null; then
-      supervisorctl stop dropbear
-      echo "Dropbear stopped"
-    else
-      echo "Dropbear already stopped"
-    fi
-    ;;
-  status)
-    if pidof dropbear > /dev/null; then
-      echo "Dropbear is running"
-    else
-      echo "Dropbear is not running"
-    fi
-    ;;
-  restart)
-    supervisorctl restart dropbear
-    echo "Dropbear restarted"
-    ;;
-  *)
-    echo "Usage: $0 {start|stop|restart|status}"
-    exit 1
+    start)
+        if dropbear_status; then
+            echo "SSH already running"
+        else
+            start
+        fi
+        ;;
+    stop)
+        if dropbear_status; then
+            stop
+        else
+            echo "SSH is not running"
+        fi
+        ;;
+    status)
+        if dropbear_status; then
+            echo "SSH already running"
+        else
+            echo "SSH is not running"
+        fi
+        ;;
+    restart)
+        stop
+        sleep 3
+        start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        ;;
 esac

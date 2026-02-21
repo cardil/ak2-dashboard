@@ -19,10 +19,7 @@
 #include "api/settings.h"
 
 // External functions from request.c
-extern void get_memory_info(unsigned long long *total_mem, unsigned long long *free_mem);
 extern int file_exists(const char *path);
-extern char system_buffer[];
-extern int system_with_output(const char *cmd, int line_number);
 
 // A buffer to hold the JSON response
 char api_response_buffer[8192];
@@ -147,9 +144,21 @@ void handle_api_request(struct REQUEST *req, char *filename) {
     return;
   }
 
+  // POST /api/system/poweroff
+  if (strcmp(req->path, "/api/system/poweroff") == 0 && strcmp(req->type, "POST") == 0) {
+    handle_post_system_poweroff(req);
+    return;
+  }
+
   // POST /api/system/ssh
   if (strcmp(req->path, "/api/system/ssh") == 0 && strcmp(req->type, "POST") == 0) {
     handle_post_system_ssh(req);
+    return;
+  }
+
+  // POST /api/system/log/clear
+  if (strcmp(req->path, "/api/system/log/clear") == 0 && strcmp(req->type, "POST") == 0) {
+    handle_post_system_log_clear(req);
     return;
   }
 
@@ -185,13 +194,18 @@ void handle_post_security_password(struct REQUEST *req) {
     return;
   }
 
-  // Use chpasswd to change root password
+  // Change root password using passwd (OpenWRT/TinaLinux compatible)
+  // passwd expects password on stdin twice (new password + confirmation)
+  // Output varies (4-5 lines):
+  //   Real printer: "Changing password for root\nNew password:\nRetype password:\npasswd: password for root changed by root"
+  //   Testbed: "Changing password for root\nNew password:\nBad password: too weak\nRetype password:\npasswd: password for root changed by root"
+  // Read enough lines to capture the last line with success message
   char command[512];
-  snprintf(command, sizeof(command), "echo 'root:%s' | /usr/sbin/chpasswd 2>&1", password);
-  system_with_output(command, 1);
+  snprintf(command, sizeof(command), "printf '%%s\\n%%s\\n' '%s' '%s' | passwd root 2>&1", password, password);
+  system_with_output(command, 6);  // Read up to 6 lines to ensure we get the success message
 
-  // chpasswd outputs "chpasswd: password for 'root' changed" on success
-  if (strstr(system_buffer, "changed") != NULL) {
+  // Check for the specific success message: "password for root changed"
+  if (strstr(system_buffer, "password for root changed") != NULL) {
     LOG("Root password changed successfully\n");
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"success\", \"message\": \"Root password changed successfully\"}");
@@ -273,9 +287,9 @@ void handle_get_system(struct REQUEST *req) {
             char cmdline[256];
             size_t len = fread(cmdline, 1, sizeof(cmdline) - 1, cmdline_fp);
             fclose(cmdline_fp);
-            if (len > 0) {
+            if (len >= 8) {
               // Search for "dropbear" in the entire buffer (cmdline has null bytes between args)
-              for (size_t i = 0; i < len - 8; i++) {  // -8 for "dropbear" length
+              for (size_t i = 0; i + 8 <= len; i++) {
                 if (memcmp(&cmdline[i], "dropbear", 8) == 0) {
                   found_dropbear = 1;
                   break;
@@ -307,7 +321,7 @@ void handle_get_system(struct REQUEST *req) {
 // POST /api/system/reboot - Reboot the system
 void handle_post_system_reboot(struct REQUEST *req) {
   LOG("System reboot requested\n");
-  system("sync && reboot &");
+  system_with_output("sync && reboot &", 1);
 
   snprintf(api_response_buffer, sizeof(api_response_buffer),
           "{\"status\": \"success\", \"message\": \"System is rebooting\"}");
@@ -341,18 +355,26 @@ void handle_post_system_ssh(struct REQUEST *req) {
   }
 
   if (strcmp(action, "start") == 0) {
-    system("/opt/etc/init.d/S51dropbear start 2>&1");
+    LOG("Starting SSH service...\n");
+    system_with_output("/opt/etc/init.d/S51dropbear start 2>&1", 1);
     LOG("SSH service started\n");
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"success\", \"message\": \"SSH service started\"}");
   } else if (strcmp(action, "stop") == 0) {
-    system("/opt/etc/init.d/S51dropbear stop 2>&1");
+    LOG("Stopping SSH service...\n");
+    system_with_output("/opt/etc/init.d/S51dropbear stop 2>&1", 1);
     LOG("SSH service stopped\n");
     snprintf(api_response_buffer, sizeof(api_response_buffer),
             "{\"status\": \"success\", \"message\": \"SSH service stopped\"}");
+  } else if (strcmp(action, "restart") == 0) {
+    LOG("Restarting SSH service...\n");
+    system_with_output("/opt/etc/init.d/S51dropbear restart 2>&1", 1);
+    LOG("SSH service restarted\n");
+    snprintf(api_response_buffer, sizeof(api_response_buffer),
+            "{\"status\": \"success\", \"message\": \"SSH service restarted\"}");
   } else {
     snprintf(api_response_buffer, sizeof(api_response_buffer),
-            "{\"status\": \"error\", \"message\": \"Invalid action. Use 'start' or 'stop'.\"}");
+            "{\"status\": \"error\", \"message\": \"Invalid action. Use 'start', 'stop', or 'restart'.\"}");
     req->body = api_response_buffer;
     req->lbody = strlen(api_response_buffer);
     req->mime = "application/json";
@@ -360,6 +382,33 @@ void handle_post_system_ssh(struct REQUEST *req) {
     return;
   }
 
+  req->body = api_response_buffer;
+  req->lbody = strlen(api_response_buffer);
+  req->mime = "application/json";
+  mkheader(req, 200);
+}
+
+// POST /api/system/poweroff - Power off the system
+void handle_post_system_poweroff(struct REQUEST *req) {
+  LOG("System poweroff requested\n");
+  system_with_output("sync && poweroff &", 1);
+
+  snprintf(api_response_buffer, sizeof(api_response_buffer),
+          "{\"status\": \"success\", \"message\": \"System is shutting down\"}");
+  req->body = api_response_buffer;
+  req->lbody = strlen(api_response_buffer);
+  req->mime = "application/json";
+  mkheader(req, 200);
+}
+
+// POST /api/system/log/clear - Clear the printer log
+void handle_post_system_log_clear(struct REQUEST *req) {
+  LOG("Clearing log...\n");
+  system_with_output("cat /dev/null > /mnt/UDISK/log", 1);
+  LOG("Log cleared\n");
+
+  snprintf(api_response_buffer, sizeof(api_response_buffer),
+          "{\"status\": \"success\", \"message\": \"Log cleared\"}");
   req->body = api_response_buffer;
   req->lbody = strlen(api_response_buffer);
   req->mime = "application/json";

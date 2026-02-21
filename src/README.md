@@ -10,55 +10,41 @@ The backend is a lightweight, resource-efficient web server designed to run on t
 
 - **WEBFS Core** - Static file serving, HTTP protocol handling
 - **Custom API Layer** - Printer communication, mesh processing, system tools
-- **MUSL Library** - Static compilation for minimal dependencies
+- **glibc Library** - Standard C library for ARM
 - **ARM Cross-compilation** - Built for printer's ARM architecture
 
 ### Resource Usage
-- **Memory:** <1% of system RAM (~10-15MB total)
+- **Memory:** ~1.5MB RSS (1.4% of 111MB system RAM)
 - **CPU:** Minimal, spikes only during requests
-- **Storage:** ~2-3MB executable (stripped)
+- **Storage:** ~230KB executable (with debug symbols for backtrace)
 
 ## Building from Source
 
 ### Prerequisites
 
-The build supports two cross-compilation methods:
-
-**Method 1: Downloaded Cross-compiler (Default, Faster)**
-
-Download and extract MUSL cross-compiler:
+Docker or Podman is required for cross-compilation:
 
 ```bash
 cd src
 make init
 ```
 
-The toolchain will be downloaded to `arm-linux-musleabi-cross/` in the src directory.
+The Debian Jessie ARM toolchain will be used via Docker/Podman.
 
-**Method 2: Docker Compiler Wrapper (EXPERIMENTAL - CI Only)**
-
-⚠️ **WARNING:** Docker method uses Alpine ARM gcc instead of musl.cc cross-compiler.
-The resulting binary has NOT been tested on actual printer hardware. Use wget method for production builds.
-
-Requires Docker or Podman with QEMU support:
+Requires Docker or Podman:
 
 ```bash
 cd src
-USE_DOCKER=1 make init
+make init
 ```
 
-This builds a Docker image with ARM gcc that wraps compiler calls. No external downloads needed (useful for CI).
+This builds a Docker image with Debian Jessie ARM gcc toolchain.
 
 ### Build Commands
 
-**Full Build (Default Method):**
+**Full Build:**
 ```bash
 make
-```
-
-**Full Build (Docker Method):**
-```bash
-USE_DOCKER=1 make
 ```
 
 **Backend Only:**
@@ -67,19 +53,11 @@ cd src
 make
 ```
 
-**Backend with Docker:**
-```bash
-cd src
-USE_DOCKER=1 make
-```
-
 **Clean Build:**
 ```bash
 make clean
 make
 ```
-
-The Docker method is primarily used in CI/CD pipelines to avoid downloading from musl.cc, but produces untested binaries. **Use the default wget method for production builds.**
 
 ### Build Process
 
@@ -92,12 +70,27 @@ The Docker method is primarily used in CI/CD pipelines to avoid downloading from
 
 ### Build Configuration
 
-**Makefile Variables:**
+The Makefile uses Docker/Podman to cross-compile for ARM with glibc:
+
+- **Compiler**: `gcc` wrapped in Debian Jessie ARM container
+- **Platform**: `linux/arm/v7`
+- **Image**: `localhost/arm-cross-cc` (built from [`build.Dockerfile`](build.Dockerfile:1))
+- **Linking**: Dynamic linking with glibc (printer has glibc 2.23)
+- **Debug Support**: Includes backtrace support (`-g -funwind-tables -fno-omit-frame-pointer -rdynamic`)
+
+**Key Compiler Flags:**
 ```makefile
-CC = arm-linux-musleabi-cross/bin/arm-linux-musleabi-gcc
-CFLAGS = -O2 -Wall -static
-LDFLAGS = -static
+CFLAGS = -D_GNU_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 \
+          -I./vendor/jsmn -g -funwind-tables -fno-omit-frame-pointer -std=gnu99
+LDFLAGS = -rdynamic -lm -lpthread
 ```
+
+**Build Targets:**
+- `make init` - Build Docker image and download jsmn library
+- `make build` - Full build (lint, compile, export binary)
+- `make compile` - Compile only (skip export)
+- `make lint` - Check sources with editorconfig-checker
+- `make clean` - Remove build artifacts
 
 ## Code Structure
 
@@ -404,8 +397,8 @@ curl http://PRINTER_IP:8001/api/webserver.json
 - Ensure all required objects are linked
 
 **Cross-compilation issues:**
-- Verify MUSL toolchain is installed
-- Check `CC` path in Makefile
+- Verify Docker/Podman is installed
+- Check container image is built (`make init`)
 
 ### Runtime Errors
 
@@ -462,9 +455,9 @@ valgrind --leak-check=full ./webfsd
 
 ### Code Size
 
-- **Compiler Flags** - Use `-O2` for optimization
-- **Strip Binary** - Remove debug symbols for production
-- **Static Linking** - MUSL provides minimal static library
+- **Compiler Flags** - Use optimization flags (currently includes debug symbols)
+- **Dynamic Linking** - Uses glibc already present on printer (2.23)
+- **Binary Size** - Backtrace support adds ~50KB overhead
 
 ## Security Considerations
 
@@ -516,7 +509,7 @@ When contributing backend code:
 ## Resources
 
 - **WEBFS Documentation:** [https://linux.bytesex.org/misc/webfs.html](https://linux.bytesex.org/misc/webfs.html)
-- **MUSL libc:** [https://musl.libc.org/](https://musl.libc.org/)
+- **glibc Documentation:** [https://www.gnu.org/software/libc/](https://www.gnu.org/software/libc/)
 - **ARM GCC:** [https://gcc.gnu.org/](https://gcc.gnu.org/)
 - **HTTP/1.1 Spec:** [https://www.rfc-editor.org/rfc/rfc2616](https://www.rfc-editor.org/rfc/rfc2616)
 

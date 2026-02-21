@@ -80,7 +80,7 @@ See [frontend/README.md](frontend/README.md) and [src/README.md](src/README.md) 
 
 **Backend:**
 - [WEBFS](https://linux.bytesex.org/misc/webfs.html) - Lightweight static web server
-- [MUSL](https://musl.libc.org) - Minimal C library for ARM cross-compilation
+- [glibc](https://www.gnu.org/software/libc/) - GNU C Library for ARM cross-compilation
 - Custom C API for printer integration
 
 **Frontend:**
@@ -143,7 +143,7 @@ This project is part of a suite of community tools for Kobra 2 printers:
 
 **Built On:**
 - [WEBFS](https://linux.bytesex.org/misc/webfs.html) by Gerd Hoffmann
-- [MUSL](https://musl.libc.org) by Rich Felker and contributors
+- [glibc](https://www.gnu.org/software/libc/) - GNU C Library
 
 ## 🤲 Contributing
 

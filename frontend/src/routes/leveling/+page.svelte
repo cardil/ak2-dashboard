@@ -205,7 +205,7 @@
 
   async function handleReboot() {
     try {
-      const response = await fetch("/api/do.json?action=reboot")
+      const response = await fetch("/api/system/reboot", { method: "POST" })
       if (response.ok) {
         toast.success("Printer is rebooting...")
         // Close the modal

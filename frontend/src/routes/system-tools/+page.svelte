@@ -56,7 +56,35 @@
     action: "reboot" | "poweroff" | "ssh_start" | "ssh_stop" | "ssh_restart",
   ) {
     try {
-      const response = await fetch(`/api/do.json?action=${action}`)
+      let response: Response
+
+      // Map actions to new API endpoints
+      if (action === "reboot") {
+        response = await fetch("/api/system/reboot", { method: "POST" })
+      } else if (action === "poweroff") {
+        response = await fetch("/api/system/poweroff", { method: "POST" })
+      } else if (action === "ssh_start") {
+        response = await fetch("/api/system/ssh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "start" }),
+        })
+      } else if (action === "ssh_stop") {
+        response = await fetch("/api/system/ssh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "stop" }),
+        })
+      } else if (action === "ssh_restart") {
+        response = await fetch("/api/system/ssh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "restart" }),
+        })
+      } else {
+        throw new Error("Unknown action")
+      }
+
       if (response.ok) {
         const actionMessages: Record<typeof action, string> = {
           reboot: "Printer is rebooting...",

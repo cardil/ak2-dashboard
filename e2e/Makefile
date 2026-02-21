@@ -17,6 +17,19 @@ ARROW := $(BLUE)➜$(NC)
 DOCKER := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
 ROOT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))/..
 
+# Stamp directory (shared with root Makefile)
+STAMP_DIR := $(ROOT_DIR)/.stamps
+E2E_ALL_STAMP := $(STAMP_DIR)/.e2e-all.stamp
+
+# Source files that influence E2E tests (excluding build artifacts)
+E2E_SOURCES := $(shell find $(ROOT_DIR)/src -type f \( -name '*.c' -o -name '*.h' \) \
+		-not -path '*/vendor/*' 2>/dev/null) \
+	$(shell find $(ROOT_DIR)/frontend/src -type f \( -name '*.svelte' -o -name '*.ts' -o -name '*.js' \) 2>/dev/null) \
+	$(shell find tests -name '*.ts' 2>/dev/null) \
+	$(shell find config -type f 2>/dev/null) \
+	$(shell find scripts -type f 2>/dev/null) \
+	Dockerfile compose.yml Makefile
+
 # E2E testbed ports
 E2E_SSH_PORT ?= 20022
 E2E_HTTP_PORT ?= 20080
@@ -27,7 +40,7 @@ E2E_HTTP_PORT ?= 20080
 E2E_GEN_MESH_CMD ?= sshpass -p 'toor' ssh -o StrictHostKeyChecking=no \
 	-o UserKnownHostsFile=/dev/null -p $(E2E_SSH_PORT) root@localhost '/opt/scripts/gen-bed-mesh.sh'
 
-.PHONY: up down deploy gen-mesh clean test test-ui test-debug test-headed init help all
+.PHONY: up down deploy gen-mesh clean test test-ui test-debug test-headed init help all-clean
 
 up: ## Start the E2E testbed container
 	@echo ""
@@ -47,6 +60,11 @@ up: ## Start the E2E testbed container
 		sleep 1; \
 	done
 	@echo ""
+	@status="$$($(DOCKER) container inspect --format '{{.State.Health.Status}}' ak2-testbed 2>/dev/null)"; \
+	if [ "$$status" != "healthy" ]; then \
+		echo "$(CROSS) E2E Testbed health check failed (status: $$status)"; \
+		exit 1; \
+	fi
 	@echo "$(TICK) E2E Testbed started successfully!"
 	@echo "$(INFO) SSH access: $(BLUE)ssh -p $(E2E_SSH_PORT) root@localhost$(NC) (password: toor)"
 	@echo "$(INFO) HTTP will be available at: $(BLUE)http://localhost:$(E2E_HTTP_PORT)$(NC) (after deployment)"
@@ -79,6 +97,7 @@ clean: ## Stop testbed and remove volumes
 	@echo "$(BLUE)➜ Cleaning E2E Testbed...$(NC)"
 	@$(DOCKER) compose down -v
 	@rm -rf volumes node_modules
+	@rm -f $(E2E_ALL_STAMP)
 	@echo "$(TICK) E2E Testbed cleaned"
 	@echo ""
 
@@ -128,11 +147,22 @@ test-headed: init ## Run E2E tests with browser visible
 		npm run test:headed
 	@echo ""
 
-all: up deploy test ## Run the full E2E pipeline: up, deploy, test, down
-	@$(MAKE) down || true
+all: $(E2E_ALL_STAMP) ## Run the full E2E pipeline: up, deploy, test, down
+
+$(E2E_ALL_STAMP): $(E2E_SOURCES) node_modules/.playwright-installed
+	@$(MAKE) up
+	@$(MAKE) deploy
+	@$(MAKE) test
+	@$(MAKE) down
+	@mkdir -p $(STAMP_DIR)
+	@touch $(E2E_ALL_STAMP)
 	@echo ""
 	@echo "$(TICK) E2E pipeline completed"
 	@echo ""
+
+all-clean: ## Clean and re-run the full E2E pipeline
+	@rm -f $(E2E_ALL_STAMP)
+	@$(MAKE) all
 
 help: ## Display this help message
 	@echo "E2E Testing Makefile"

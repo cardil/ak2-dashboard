@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { fetchLogTail } from './helpers';
 
 /**
  * E2E Tests for the System Tools Page
@@ -48,10 +49,19 @@ test.describe('System Tools Page - Security', () => {
     await securityCard.getByRole('button', { name: /change/i }).click();
     
     // Wait for password change to complete
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
     
-    // Verify the form is still visible (password changed successfully)
+    // Check that no error message is displayed
+    const errorMessage = page.getByText(/failed to change/i);
+    await expect(errorMessage).not.toBeVisible();
+    
+    // Verify the form is still visible and inputs are cleared (indicating success)
     await expect(passwordInput).toBeVisible();
+    await expect(passwordInput).toHaveValue('');
+    
+    // Fetch the printer log to verify the success message
+    const logTail = await fetchLogTail(page.request);
+    expect(logTail).toContain('Root password changed successfully');
   });
 
   test('should require matching passwords', async ({ page }) => {
@@ -130,6 +140,35 @@ test.describe('System Tools Page - Services', () => {
       await page.waitForTimeout(2000);
       await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: 5000 });
     }
+  });
+
+  test('should stop and start SSH service', async ({ page }) => {
+    const servicesCard = page.locator('text=Services').locator('..');
+    
+    // Wait for SSH status to load and ensure it's running initially
+    await expect(servicesCard.locator('text=/Running|Stopped/i')).toBeVisible();
+    
+    // Ensure SSH is running first (start if not)
+    const initialRunning = await servicesCard.locator('text=Running').count();
+    if (initialRunning === 0) {
+      const startBtn = servicesCard.getByRole('button', { name: /^Start$/i });
+      await startBtn.click();
+      await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: 10000 });
+    }
+    
+    // Step 1: Stop SSH
+    const stopButton = servicesCard.getByRole('button', { name: /^Stop$/i });
+    await stopButton.click();
+    
+    // Step 2: Verify state changed to Stopped
+    await expect(servicesCard.locator('text=Stopped')).toBeVisible({ timeout: 10000 });
+    
+    // Step 3: Start SSH
+    const startButton = servicesCard.getByRole('button', { name: /^Start$/i });
+    await startButton.click();
+    
+    // Step 4: Verify state changed to Running
+    await expect(servicesCard.locator('text=Running')).toBeVisible({ timeout: 10000 });
   });
 });
 

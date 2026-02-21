@@ -1,6 +1,6 @@
 #!/bin/sh
-# Simulates reboot by killing supervisord (PID 1), which restarts the container
+# Simulates reboot by killing entrypoint (PID 1), which restarts the container
 echo "Simulating reboot..."
 sync
-# Kill supervisord (PID 1) - container will restart due to restart policy
+# Kill entrypoint (PID 1) - container will restart due to restart policy
 kill 1

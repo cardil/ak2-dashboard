@@ -751,63 +751,148 @@ export function createSystemApiMiddleware(): Connect.NextHandleFunction {
       return
     }
 
-    // Handle /api/do.json?action=...
-    if (req.method === "GET" && url.pathname === "/api/do.json") {
-      const action = url.searchParams.get("action")
+    // Handle POST /api/system/reboot
+    if (req.method === "POST" && url.pathname === "/api/system/reboot") {
+      console.log("[System Mock] Reboot requested (new API)")
+      systemState.startTime = Date.now()
       res.setHeader("Content-Type", "application/json")
+      res.statusCode = 200
+      res.end(
+        JSON.stringify({ status: "success", message: "System is rebooting" }),
+      )
+      return
+    }
 
-      switch (action) {
-        case "reboot":
-          console.log("[System Mock] Reboot requested")
-          // Reset uptime
-          systemState.startTime = Date.now()
-          res.statusCode = 200
-          res.end(JSON.stringify({ api_ver: 1, result: 1 }))
-          return
+    // Handle POST /api/system/poweroff
+    if (req.method === "POST" && url.pathname === "/api/system/poweroff") {
+      console.log("[System Mock] Poweroff requested (new API)")
+      res.setHeader("Content-Type", "application/json")
+      res.statusCode = 200
+      res.end(
+        JSON.stringify({
+          status: "success",
+          message: "System is shutting down",
+        }),
+      )
+      return
+    }
 
-        case "poweroff":
-          console.log("[System Mock] Poweroff requested")
-          res.statusCode = 200
-          res.end(JSON.stringify({ api_ver: 1, result: 1 }))
-          return
+    // Handle POST /api/system/ssh
+    if (req.method === "POST" && url.pathname === "/api/system/ssh") {
+      let body = ""
+      req.on("data", (chunk) => {
+        body += chunk.toString()
+      })
+      req.on("end", () => {
+        try {
+          const { action } = JSON.parse(body)
+          res.setHeader("Content-Type", "application/json")
 
-        case "ssh_start":
-          console.log("[System Mock] SSH start requested")
-          systemState.ssh_status = 2 // Running
-          res.statusCode = 200
-          res.end(JSON.stringify({ api_ver: 1, result: 2 }))
-          return
+          if (action === "start") {
+            console.log("[System Mock] SSH start requested (new API)")
+            systemState.ssh_status = 2
+            res.statusCode = 200
+            res.end(
+              JSON.stringify({
+                status: "success",
+                message: "SSH service started",
+              }),
+            )
+          } else if (action === "stop") {
+            console.log("[System Mock] SSH stop requested (new API)")
+            systemState.ssh_status = 0
+            res.statusCode = 200
+            res.end(
+              JSON.stringify({
+                status: "success",
+                message: "SSH service stopped",
+              }),
+            )
+          } else if (action === "restart") {
+            console.log("[System Mock] SSH restart requested (new API)")
+            systemState.ssh_status = 1
+            setTimeout(() => {
+              systemState.ssh_status = 2
+            }, 1000)
+            res.statusCode = 200
+            res.end(
+              JSON.stringify({
+                status: "success",
+                message: "SSH service restarted",
+              }),
+            )
+          } else {
+            res.statusCode = 400
+            res.end(
+              JSON.stringify({
+                status: "error",
+                message: "Invalid action. Use 'start', 'stop', or 'restart'.",
+              }),
+            )
+          }
+        } catch (error) {
+          res.statusCode = 400
+          res.end(
+            JSON.stringify({
+              status: "error",
+              message: "Invalid JSON payload",
+            }),
+          )
+        }
+      })
+      return
+    }
 
-        case "ssh_stop":
-          console.log("[System Mock] SSH stop requested")
-          systemState.ssh_status = 0 // Stopped
-          res.statusCode = 200
-          res.end(JSON.stringify({ api_ver: 1, result: 1 }))
-          return
+    // Handle POST /api/system/log/clear
+    if (req.method === "POST" && url.pathname === "/api/system/log/clear") {
+      console.log("[System Mock] Log clear requested (new API)")
+      clearLog()
+      res.setHeader("Content-Type", "application/json")
+      res.statusCode = 200
+      res.end(JSON.stringify({ status: "success", message: "Log cleared" }))
+      return
+    }
 
-        case "ssh_restart":
-          // Not in backend, but useful for frontend
-          console.log("[System Mock] SSH restart requested")
-          systemState.ssh_status = 1 // Starting
-          setTimeout(() => {
-            systemState.ssh_status = 2 // Running
-          }, 1000)
-          res.statusCode = 200
-          res.end(JSON.stringify({ api_ver: 1, result: 1 }))
-          return
+    // Handle POST /api/security/password - Change root password
+    if (req.method === "POST" && url.pathname === "/api/security/password") {
+      let body = ""
+      req.on("data", (chunk) => {
+        body += chunk.toString()
+      })
+      req.on("end", () => {
+        try {
+          const { password } = JSON.parse(body)
+          res.setHeader("Content-Type", "application/json")
 
-        case "log_clear":
-          console.log("[System Mock] Log clear requested")
-          clearLog()
-          res.statusCode = 200
-          res.end(JSON.stringify({ api_ver: 1, result: 1 }))
-          return
-
-        default:
-          res.statusCode = 200
-          res.end(JSON.stringify({ api_ver: 1, result: -1 }))
-          return
-      }
+          if (password && password.length >= 1) {
+            console.log("[System Mock] Root password changed (mock)")
+            res.statusCode = 200
+            res.end(
+              JSON.stringify({
+                status: "success",
+                message: "Password changed successfully",
+              }),
+            )
+          } else {
+            res.statusCode = 400
+            res.end(
+              JSON.stringify({
+                status: "error",
+                message: "Password must be at least 1 character",
+              }),
+            )
+          }
+        } catch (error) {
+          res.statusCode = 400
+          res.end(
+            JSON.stringify({
+              status: "error",
+              message: "Invalid JSON payload",
+            }),
+          )
+        }
+      })
+      return
     }
 
     // Handle /files/log with HEAD, Range request support

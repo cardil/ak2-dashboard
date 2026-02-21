@@ -835,66 +835,6 @@ void get_memory_info(U64 *total_mem, U64 *free_mem) {
 }
 
 
-// process action query and update /mnt/UDISK/webfs/api/do.json
-int control_api(config_option_t query) {
-    int result = -1;
-    char *action = get_key_value(query, "action", "unknown");
-    if (!strcmp(action, "reboot")) {
-        LOG( "System reboot requested\n");
-        system_with_output("reboot", 1);
-        result = 1;
-    }
-    if (!strcmp(action, "poweroff")) {
-        LOG( "System poweroff requested\n");
-        system_with_output("poweroff", 1);
-        result = 1;
-    }
-    if (!strcmp(action, "log_clear")) {
-        system("cat /dev/null > /mnt/UDISK/log");
-        LOG( "Log cleared\n");
-        result = 1;
-    }
-    if (!strcmp(action, "ssh_start")) {
-        int ssh = get_ssh_status();
-        result = 0;
-        if (ssh == 1) {
-            system_with_output("/opt/etc/init.d/S51dropbear start 2>&1", 1);
-            LOG( "SSH service started\n");
-            result = 2;
-        } else {
-            if (ssh == 2)
-                result = 2;
-        }
-    }
-    if (!strcmp(action, "ssh_stop")) {
-        int ssh = get_ssh_status();
-        result = 0;
-        if (ssh == 2) {
-            system_with_output("/opt/etc/init.d/S51dropbear stop 2>&1", 1);
-            LOG( "SSH service stopped\n");
-            result = 1;
-        } else {
-            if (ssh == 1)
-                result = 1;
-        }
-    }
-    if (!strcmp(action, "ssh_restart")) {
-        int ssh = get_ssh_status();
-        result = 0;
-        if (ssh == 2) {
-            system_with_output("/opt/etc/init.d/S51dropbear restart 2>&1", 1);
-            LOG( "SSH service restarted\n");
-            result = 2;
-        } else {
-            // If not running, start it
-            system_with_output("/opt/etc/init.d/S51dropbear start 2>&1", 1);
-            LOG( "SSH service started\n");
-            result = 2;
-        }
-    }
-    sprintf(static_template_buffer, "{\"api_ver\":1, \"result\":%d}", result);
-    return custom_copy_file(NULL, "/mnt/UDISK/webfs/api/do.json", "wb", static_template_buffer);
-}
 
 char *leveling_template_callback(char key) {
     // response code replacement
@@ -1412,15 +1352,6 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
 
         // Point the server to the image in tmpfs
         strcpy(filename_str, "/tmp/cam.jpg");
-        goto e_x_i_t;
-    }
-
-    // ----------------------------- access to the do.json file -----------------------------
-    if ((!strcmp(req->path, "/api/do.json"))) {
-        // turn off the cache
-        req->cache_turn_off = 'Y';
-
-        control_api(query);
         goto e_x_i_t;
     }
 

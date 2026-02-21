@@ -58,6 +58,13 @@ if [ "${INTERACTIVE:-yes}" = "yes" ]; then
         echo "$ip:$username:$port" > "$ssh_cfg"
         echo "Configuration saved to: $ssh_cfg" >&2
     fi
+else
+    # Non-interactive mode - require saved config
+    if [ -z "$saved_ip" ]; then
+        echo "Error: No saved SSH config found at $ssh_cfg" >&2
+        echo "Run 'make deploy' in interactive mode first to configure printer settings." >&2
+        exit 1
+    fi
 fi
 
 # Export values for use by caller

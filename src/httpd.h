@@ -2,6 +2,7 @@
 #define HTTPD_H
 
 #include <sys/stat.h>
+#include <fcntl.h>
 
 // #define MORE_INFO
 // #define NO_SENDFILE
@@ -156,6 +157,7 @@ void xerror(int loglevel, char *txt, char *peerhost);
 int file_exists(const char *filename);
 
 static void inline close_on_exec(int fd) {
+    fcntl(fd, F_SETFD, FD_CLOEXEC);
 }
 
 /* --- request.c ------------------------------------------------ */

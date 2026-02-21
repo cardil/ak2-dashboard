@@ -2,5 +2,17 @@
 # Simulates poweroff
 echo "Simulating poweroff..."
 sync
-killall webfsd 2>/dev/null
+
+# Stop SSH service using S51dropbear script
+if [ -x /opt/etc/init.d/S51dropbear ]; then
+    /opt/etc/init.d/S51dropbear stop
+fi
+
+# Kill webfsd using pgrep pattern (works with glibc loader)
+# Pattern ends with space to match "webfsd -p ..." but not "webfsd-runner"
+pids=$(pgrep -f "/opt/bin/webfsd " 2>/dev/null) || true
+if [ -n "$pids" ]; then
+    kill $pids 2>/dev/null || true
+fi
+
 echo "System halted (simulated)"

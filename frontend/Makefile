@@ -19,10 +19,10 @@ TEST_FILES := $(shell find test -type f)
 STATIC_FILES := $(shell find static -type f)
 FRONTEND_TARGET := ../webserver/opt/webfs/
 RSYNC_GUARD := $(shell find ../webserver/opt/webfs/)
-STAMP_DIR := .svelte-kit/stamps
-LINT_STAMP := $(STAMP_DIR)/.lint.stamp
-COMPILE_STAMP := $(STAMP_DIR)/.compile.stamp
-TEST_STAMP := $(STAMP_DIR)/.test.stamp
+STAMP_DIR := ../.stamps
+LINT_STAMP := $(STAMP_DIR)/.frontend-lint.stamp
+COMPILE_STAMP := $(STAMP_DIR)/.frontend-compile.stamp
+TEST_STAMP := $(STAMP_DIR)/.frontend-test.stamp
 
 .PHONY: all build init lint compile test clean help build-only init lint-only compile-only test-only
 

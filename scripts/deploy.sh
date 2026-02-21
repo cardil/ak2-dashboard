@@ -24,7 +24,13 @@ echo ""
 # Load configuration from script or use command-line parameters
 if [ -z "$PRINTER_IP" ]; then
     echo "${INFO} Loading deployment configuration..."
-    eval "$(INTERACTIVE=yes "$SCRIPT_DIR/get-deploy-config.sh")" || exit 1
+    # Auto-detect interactive mode based on TTY availability
+    if [ -t 0 ] && [ -t 1 ]; then
+        INTERACTIVE=yes
+    else
+        INTERACTIVE=no
+    fi
+    eval "$(INTERACTIVE=$INTERACTIVE "$SCRIPT_DIR/get-deploy-config.sh")" || exit 1
     
     # Validate configuration was loaded
     if [ -z "$PRINTER_IP" ] || [ -z "$PRINTER_USER" ] || [ -z "$PRINTER_PORT" ] || [ -z "$WEBFSD_PORT" ]; then
@@ -86,20 +92,8 @@ if ! ${SSH_CMD} -p "${PRINTER_PORT}" "${PRINTER_USER}@${PRINTER_IP}" "
         sed -i 's/^-p [0-9]*\$/-p ${WEBFSD_PORT}/' /etc/webfsd/webfsd.conf
     fi &&
     
-    # Enable/disable debug mode in config
-    if [ '${WEBFSD_DEBUG}' = '1' ]; then
-        # Uncomment -d line or add if not present
-        if grep -q '^# *-d\$' /etc/webfsd/webfsd.conf; then
-            sed -i 's/^# *-d\$/-d/' /etc/webfsd/webfsd.conf
-        elif ! grep -q '^-d\$' /etc/webfsd/webfsd.conf; then
-            echo '-d' >> /etc/webfsd/webfsd.conf
-        fi
-    else
-        # Comment out -d line if present
-        sed -i 's/^-d\$/# -d/' /etc/webfsd/webfsd.conf 2>/dev/null || true
-    fi &&
-    
-    /opt/bin/webfsd-runner
+    # Pass WEBFSD_DEBUG to runner (one-off debug mode)
+    WEBFSD_DEBUG='${WEBFSD_DEBUG}' /opt/bin/webfsd-runner
 "; then
     echo "${CROSS} Deployment failed. Check prerequisites."
     exit 1

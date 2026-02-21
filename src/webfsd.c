@@ -13,6 +13,9 @@
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef __GLIBC__
+#include <execinfo.h>
+#endif
 // #include <sys/signal.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -72,6 +75,93 @@ static void catchsig(int sig) {
         termsig = sig;
     if (SIGHUP == sig)
         got_sighup = 1;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Crash signal handler - captures crashes and logs diagnostic info       */
+/* Uses async-signal-safe functions only (write, _exit)                   */
+
+/* Helper to write string to fd (async-signal-safe) */
+static void write_str(int fd, const char *s) {
+    if (s) {
+        size_t len = 0;
+        while (s[len]) len++;
+        (void)write(fd, s, len);
+    }
+}
+
+/* Helper to write int as string (async-signal-safe) */
+static void write_int(int fd, int n) {
+    char buf[16];
+    int i = sizeof(buf) - 1;
+    int neg = 0;
+    if (n < 0) { neg = 1; n = -n; }
+    buf[i--] = '\0';
+    do {
+        buf[i--] = '0' + (n % 10);
+        n /= 10;
+    } while (n > 0);
+    if (neg) buf[i--] = '-';
+    write_str(fd, &buf[i + 1]);
+}
+
+static void crash_handler(int sig) {
+    int log_fd = -1;
+    const char *signame;
+    void *bt_buffer[32];
+    int bt_size = 0;
+
+    /* Map signal number to name */
+    switch(sig) {
+        case SIGSEGV: signame = "SIGSEGV (Segmentation fault)"; break;
+        case SIGBUS:  signame = "SIGBUS (Bus error)"; break;
+        case SIGABRT: signame = "SIGABRT (Aborted)"; break;
+        case SIGFPE:  signame = "SIGFPE (Floating point exception)"; break;
+        case SIGILL:  signame = "SIGILL (Illegal instruction)"; break;
+        default:      signame = "Unknown signal"; break;
+    }
+
+    /* Try to open log file directly (async-signal-safe) */
+    if (logfile != NULL) {
+        log_fd = open(logfile, O_WRONLY | O_APPEND | O_CREAT, 0644);
+    }
+    if (log_fd < 0) {
+        log_fd = STDERR_FILENO;
+    }
+
+    /* Write crash header */
+    write_str(log_fd, "\n========== CRASH REPORT ==========\n");
+    write_str(log_fd, "FATAL: webfsd crashed with signal ");
+    write_int(log_fd, sig);
+    write_str(log_fd, " (");
+    write_str(log_fd, signame);
+    write_str(log_fd, ")\n");
+
+    /* Try to get backtrace - backtrace_symbols_fd is async-signal-safe */
+#ifdef __GLIBC__
+    bt_size = backtrace(bt_buffer, 32);
+    if (bt_size > 0) {
+        write_str(log_fd, "\nBacktrace:\n");
+        backtrace_symbols_fd(bt_buffer, bt_size, log_fd);
+    }
+#else
+    write_str(log_fd, "(Backtrace not available - requires glibc)\n");
+    (void)bt_buffer;
+    (void)bt_size;
+#endif
+
+    write_str(log_fd, "\nPlease report this crash at:\n");
+    write_str(log_fd, "https://github.com/cardil/ak2-dashboard/issues\n");
+    write_str(log_fd, "===================================\n\n");
+
+    /* Close log if we opened it */
+    if (log_fd != STDERR_FILENO) {
+        close(log_fd);
+    }
+
+    /* Re-raise signal with default handler for core dump (if enabled) */
+    signal(sig, SIG_DFL);
+    raise(sig);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -978,6 +1068,14 @@ int main(int argc, char *argv[]) {
     sigaction(SIGTERM, &act, &old);
     if (debug)
         sigaction(SIGINT, &act, &old);
+
+    /* setup crash handlers for diagnostics */
+    act.sa_handler = crash_handler;
+    sigaction(SIGSEGV, &act, &old);
+    sigaction(SIGBUS, &act, &old);
+    sigaction(SIGABRT, &act, &old);
+    sigaction(SIGFPE, &act, &old);
+    sigaction(SIGILL, &act, &old);
 
     // verify if the copy of the doc root exists
     // if not create it
