@@ -10,6 +10,7 @@
   function toggleWebcam() {
     webcamActive = !webcamActive
     if (webcamActive) {
+      webcamSrc = `/webcam/cam.jpg?_=${new Date().getTime()}`
       webcamInterval = setInterval(() => {
         webcamSrc = `/webcam/cam.jpg?_=${new Date().getTime()}`
       }, 125)

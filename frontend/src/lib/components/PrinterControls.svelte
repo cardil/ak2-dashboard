@@ -49,7 +49,7 @@
 
   $: isPrinterIdle = printer?.state === "free"
   $: canUploadAndPrint = !!(activePrinterId && isPrinterIdle && printer?.online)
-  $: showExpandedView = !isPrinterIdle && printer?.state !== "busy"
+  $: showExpandedView = !!printer && !isPrinterIdle && printer?.state !== "busy"
   $: nozzleTemp = printer?.nozzle_temp ?? "---"
   $: nozzleTarget = printer?.target_nozzle_temp ?? "---"
   $: bedTemp = printer?.hotbed_temp ?? "---"
@@ -96,9 +96,8 @@
   })()
   $: speedMode = (() => {
     const mode = printer?.print_job?.print_speed_mode
-    return mode === undefined || mode < 0
-      ? "N/A"
-      : ["Silent", "Normal", "Sport"][mode]
+    if (mode === undefined || mode === null || mode < 0) return "N/A"
+    return ["Silent", "Normal", "Sport"][mode] ?? "N/A"
   })()
   $: formattedZOffset = (() => {
     const offset = Number(printer?.print_job?.z_offset ?? 0)
