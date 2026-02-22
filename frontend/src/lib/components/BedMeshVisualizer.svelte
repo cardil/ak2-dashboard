@@ -30,6 +30,7 @@
     const isDarkMode =
       currentTheme === "dark" ||
       (currentTheme === "auto" &&
+        typeof window !== "undefined" &&
         window.matchMedia("(prefers-color-scheme: dark)").matches)
     return {
       backgroundColor: isDarkMode ? "#1e1e1e" : "#ffffff",
@@ -170,20 +171,10 @@
   }
 
   onMount(() => {
-    const unsubscribe = theme.subscribe((currentTheme) => {
-      drawChart(currentTheme)
-    })
-
     resizeObserver = new ResizeObserver(() => {
       chart?.resize()
     })
     resizeObserver.observe(chartContainer)
-
-    return () => {
-      unsubscribe()
-      chart?.dispose()
-      resizeObserver.disconnect()
-    }
   })
 
   onDestroy(() => {
@@ -193,6 +184,8 @@
     }
   })
 
+  // Redraws chart when meshData or theme changes (runs client-side only,
+  // since chartContainer is undefined during SSR prerender)
   $: if (meshData && chartContainer) {
     drawChart($theme)
   }
