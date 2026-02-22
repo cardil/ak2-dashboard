@@ -52,7 +52,7 @@ You can still override any parameter via command line:
 make deploy PRINTER_IP=192.168.1.100 PRINTER_USER=root PRINTER_PORT=22 WEBFSD_PORT=80
 
 # Or override specific values
-make deploy PRINTER_IP=192.168.1.50 WEBFSD_PORT=8080
+make deploy PRINTER_IP=192.168.1.50 WEBFSD_PORT=80
 ```
 
 **Prerequisites on Printer:**

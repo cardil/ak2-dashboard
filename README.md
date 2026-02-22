@@ -46,7 +46,7 @@ make deploy PRINTER_IP=192.168.1.100
 
 **New User?** See **[INSTALL.md](INSTALL.md)** for complete jailbreak and installation instructions.
 
-**Access Dashboard:** `http://YOUR_PRINTER_IP:8000`
+**Access Dashboard:** `http://YOUR_PRINTER_IP` (default port 80)
 
 ### For Developers
 
