@@ -4,11 +4,6 @@
     type KobraConnectionStatus,
   } from "$lib/stores/kobraConnection"
 
-  let status: KobraConnectionStatus
-  kobraConnectionStore.subscribe((value) => {
-    status = value
-  })
-
   const messages: Record<
     KobraConnectionStatus,
     { title: string; body: string } | null
@@ -29,7 +24,7 @@
     },
   }
 
-  $: message = messages[status]
+  $: message = messages[$kobraConnectionStore]
 </script>
 
 {#if message}
