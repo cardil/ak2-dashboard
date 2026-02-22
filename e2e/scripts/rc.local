@@ -4,8 +4,9 @@
 
 # Generate bed mesh points if not already present
 if [ -x /opt/scripts/gen-bed-mesh.sh ] && ! grep -q "^points" /user/printer.cfg; then
-    /opt/scripts/gen-bed-mesh.sh > /dev/null 2>&1
-    echo "Generated bed mesh points"
+    if /opt/scripts/gen-bed-mesh.sh > /dev/null 2>&1; then
+        echo "Generated bed mesh points"
+    fi
 fi
 
 # Start webfsd using wrapper script
