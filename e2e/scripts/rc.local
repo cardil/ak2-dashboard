@@ -1,0 +1,16 @@
+#!/bin/sh
+# rc.local - runs at startup like on the printer
+# This starts the webserver as configured by kobra2-fw-tools deployment
+
+# Generate bed mesh points if not already present
+if [ -x /opt/scripts/gen-bed-mesh.sh ] && ! grep -q "^points" /user/printer.cfg; then
+    if /opt/scripts/gen-bed-mesh.sh > /dev/null 2>&1; then
+        echo "Generated bed mesh points"
+    fi
+fi
+
+# Start webfsd using wrapper script
+if [ -x /opt/bin/webfsd-runner ]; then
+    /opt/bin/webfsd-runner &
+    echo "webfsd started"
+fi

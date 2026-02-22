@@ -20,20 +20,20 @@
 /* os-specific sendfile() wrapper                                         */
 
 /*
- * int xsendfile(out,in,offset,bytes)
- *
- *	out    - outgoing filedescriptor (i.e. the socket)
- *	in     - incoming filedescriptor (i.e. the file to send out)
- *	offset - file offset (where to start)
- *      bytes  - number of bytes to send
- *
- * return value
- *	on error:   -1 and errno set.
- *	on success: the number of successfully written bytes (which might
- *		    be smaller than bytes, we are doing nonblocking I/O).
- *	extra hint: much like write(2) works.
- *
- */
+* int xsendfile(out,in,offset,bytes)
+*
+*	out    - outgoing filedescriptor (i.e. the socket)
+*	in     - incoming filedescriptor (i.e. the file to send out)
+*	offset - file offset (where to start)
+*      bytes  - number of bytes to send
+*
+* return value
+*	on error:   -1 and errno set.
+*	on success: the number of successfully written bytes (which might
+*		    be smaller than bytes, we are doing nonblocking I/O).
+*	extra hint: much like write(2) works.
+*
+*/
 
 static inline size_t off_to_size(off_t off_bytes) {
     if (off_bytes > MAX_SENDFILE)
@@ -47,11 +47,11 @@ static inline size_t off_to_size(off_t off_bytes) {
 static ssize_t xsendfile(int out, int in, off_t offset, off_t off_bytes) {
     size_t bytes = off_to_size(off_bytes);
 #ifdef MORE_INFO
-    fprintf(stderr, "+++ call xsendfile %d, %d, %d, %d\n", out, in, offset, bytes);
+    LOG( "+++ call xsendfile %d, %d, %d, %d\n", out, in, offset, bytes);
 #endif
     int send_bytes = sendfile(out, in, &offset, bytes);
 #ifdef MORE_INFO
-    fprintf(stderr, "+++ retn xsendfile %d\n", send_bytes);
+    LOG( "+++ retn xsendfile %d\n", send_bytes);
 #endif
     return send_bytes;
 }
@@ -95,7 +95,7 @@ static ssize_t xsendfile(int out, int in, off_t offset, off_t off_bytes) {
         nsent_total += nsent;
         if (nsent < nread)
             /* that was a partial write only.  Queue full.  Bailout here,
-                     the next write would return EAGAIN anyway... */
+                    the next write would return EAGAIN anyway... */
             break;
 
         bytes -= nread;
@@ -117,6 +117,7 @@ static struct HTTP_STATUS {
     char *body;
 } http[] = {
     {200, "200 OK", NULL},
+    {201, "201 Created", NULL},
     {206, "206 Partial Content", NULL},
     {304, "304 Not Modified", NULL},
     {400, "400 Bad Request", "*PLONK*\n"},
@@ -143,10 +144,10 @@ static void
 mkcors(struct REQUEST *req) {
     if (NULL != req->cors) {
         req->lres += sprintf(req->hres + req->lres,
-                             "Access-Control-Allow-Origin: %s\r\n",
-                             req->cors);
+                            "Access-Control-Allow-Origin: %s\r\n",
+                            req->cors);
         if (debug)
-            fprintf(stderr, "%03d: CORS added: CORS=%s\n",
+            LOG( "%03d: CORS added: CORS=%s\n",
                     req->fd, req->cors);
     }
 }
@@ -169,14 +170,14 @@ void mkerror(struct REQUEST *req, int status, int ka) {
                         (int64_t)req->lbody);
     if (401 == status)
         req->lres += sprintf(req->hres + req->lres,
-                             "WWW-Authenticate: Basic realm=\"webfs\"\r\n");
+                            "WWW-Authenticate: Basic realm=\"webfs\"\r\n");
     mkcors(req);
     req->lres += strftime(req->hres + req->lres, 80,
                           "Date: " RFC1123 "\r\n\r\n",
                           gmtime(&now));
     req->state = STATE_WRITE_HEADER;
     if (debug)
-        fprintf(stderr, "%03d: error: %d, connection=%s\n",
+        LOG( "%03d: error: %d, connection=%s\n",
                 req->fd, status, req->keep_alive ? "Keep-Alive" : "Close");
 }
 
@@ -199,25 +200,25 @@ void mkredirect(struct REQUEST *req) {
                           gmtime(&now));
     req->state = STATE_WRITE_HEADER;
     if (debug)
-        fprintf(stderr, "%03d: 302 redirect: %s, connection=%s\n",
+        LOG( "%03d: 302 redirect: %s, connection=%s\n",
                 req->fd, req->path, req->keep_alive ? "Keep-Alive" : "Close");
 }
 
 static int
 mkmulti(struct REQUEST *req, int i) {
     req->r_hlen[i] = sprintf(req->r_head + i * BR_HEADER,
-                             "\r\n--" BOUNDARY
-                             "\r\n"
-                             "Content-type: %s\r\n"
-                             "Content-range: bytes %" PRId64 "-%" PRId64 "/%" PRId64
-                             "\r\n"
-                             "\r\n",
-                             now, req->mime,
-                             (int64_t)req->r_start[i],
-                             (int64_t)req->r_end[i] - 1,
-                             (int64_t)req->bst.st_size);
+                            "\r\n--" BOUNDARY
+                            "\r\n"
+                            "Content-type: %s\r\n"
+                            "Content-range: bytes %" PRId64 "-%" PRId64 "/%" PRId64
+                            "\r\n"
+                            "\r\n",
+                            now, req->mime,
+                            (int64_t)req->r_start[i],
+                            (int64_t)req->r_end[i] - 1,
+                            (int64_t)req->bst.st_size);
     if (debug)
-        fprintf(stderr, "%03d: send range: %" PRId64 "-%" PRId64 "/%" PRId64 " (%" PRId64 " byte)\n",
+        LOG( "%03d: send range: %" PRId64 "-%" PRId64 "/%" PRId64 " (%" PRId64 " byte)\n",
                 req->fd,
                 (int64_t)req->r_start[i],
                 (int64_t)req->r_end[i],
@@ -231,6 +232,15 @@ void mkheader(struct REQUEST *req, int status) {
     off_t len;
     time_t expires;
 
+    // Initialize ctime if not already set (e.g., for API responses)
+    if (req->ctime[0] == '\0') {
+        struct tm tm_now;
+        time_t now_time;
+        time(&now_time);
+        gmtime_r(&now_time, &tm_now);
+        strftime(req->ctime, sizeof(req->ctime), RFC1123, &tm_now);
+    }
+
     for (i = 0; http[i].status != 0; i++)
         if (http[i].status == status)
             break;
@@ -241,36 +251,36 @@ void mkheader(struct REQUEST *req, int status) {
                         req->keep_alive ? "Keep-Alive" : "Close");
     if (req->ranges == 0) {
         req->lres += sprintf(req->hres + req->lres,
-                             "Content-Type: %s\r\n"
-                             "Content-Length: %" PRId64 "\r\n",
-                             req->mime,
-                             (int64_t)(req->body ? req->lbody : req->bst.st_size));
+                            "Content-Type: %s\r\n"
+                            "Content-Length: %" PRId64 "\r\n",
+                            req->mime,
+                            (int64_t)(req->body ? req->lbody : req->bst.st_size));
     } else if (req->ranges == 1) {
         req->lres += sprintf(req->hres + req->lres,
-                             "Content-Type: %s\r\n"
-                             "Content-Range: bytes %" PRId64 "-%" PRId64 "/%" PRId64
-                             "\r\n"
-                             "Content-Length: %" PRId64 "\r\n",
-                             req->mime,
-                             (int64_t)req->r_start[0],
-                             (int64_t)req->r_end[0] - 1,
-                             (int64_t)req->bst.st_size,
-                             (int64_t)(req->r_end[0] - req->r_start[0]));
+                            "Content-Type: %s\r\n"
+                            "Content-Range: bytes %" PRId64 "-%" PRId64 "/%" PRId64
+                            "\r\n"
+                            "Content-Length: %" PRId64 "\r\n",
+                            req->mime,
+                            (int64_t)req->r_start[0],
+                            (int64_t)req->r_end[0] - 1,
+                            (int64_t)req->bst.st_size,
+                            (int64_t)(req->r_end[0] - req->r_start[0]));
     } else {
         for (i = 0, len = 0; i < req->ranges; i++) {
             len += mkmulti(req, i);
             len += req->r_end[i] - req->r_start[i];
         }
         req->r_hlen[i] = sprintf(req->r_head + i * BR_HEADER,
-                                 "\r\n--" BOUNDARY "--\r\n",
-                                 now);
+                                "\r\n--" BOUNDARY "--\r\n",
+                                now);
         len += req->r_hlen[i];
         req->lres += sprintf(req->hres + req->lres,
-                             "Content-Type: multipart/byteranges;"
-                             " boundary=" BOUNDARY
-                             "\r\n"
-                             "Content-Length: %" PRId64 "\r\n",
-                             now, (int64_t)len);
+                            "Content-Type: multipart/byteranges;"
+                            " boundary=" BOUNDARY
+                            "\r\n"
+                            "Content-Length: %" PRId64 "\r\n",
+                            now, (int64_t)len);
     }
     if (req->mtime[0] != '\0') {
         req->lres += sprintf(req->hres + req->lres, "Last-Modified: %s\r\n", req->mtime);
@@ -285,7 +295,7 @@ void mkheader(struct REQUEST *req, int status) {
     req->lres += sprintf(req->hres + req->lres, "Date: %s\r\n\r\n", req->ctime);
     req->state = STATE_WRITE_HEADER;
     if (debug)
-        fprintf(stderr, "%03d: %d, connection=%s\n", req->fd, status, req->keep_alive ? "Keep-Alive" : "Close");
+        LOG( "%03d: %d, connection=%s\n", req->fd, status, req->keep_alive ? "Keep-Alive" : "Close");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -300,7 +310,7 @@ void write_request(struct REQUEST *req) {
                 if (0 == req->tcp_cork && !req->head_only) {
                     req->tcp_cork = 1;
                     if (debug)
-                        fprintf(stderr, "%03d: tcp_cork=%d\n", req->fd, req->tcp_cork);
+                        LOG( "%03d: tcp_cork=%d\n", req->fd, req->tcp_cork);
                     setsockopt(req->fd, SOL_TCP, TCP_CORK, &req->tcp_cork, sizeof(int));
                 }
 #endif
@@ -380,7 +390,7 @@ void write_request(struct REQUEST *req) {
                         return;
                     default:
                         if (debug)
-                            fprintf(stderr, "%03d: %" PRId64 "/%" PRId64 " (%d%%)\r", req->fd,
+                            LOG( "%03d: %" PRId64 "/%" PRId64 " (%d%%)\r", req->fd,
                                     (int64_t)req->written, (int64_t)req->bst.st_size,
                                     (int)(req->written * 100 / req->bst.st_size));
                         req->written += rc;

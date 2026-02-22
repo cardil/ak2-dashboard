@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.svelte-kit/
+build/
+
+# Generated files
+test/mocks/mockCommands.json
+
+# Lock files
+package-lock.json
+

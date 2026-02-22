@@ -1,0 +1,216 @@
+#!/bin/sh
+# Webfsd startup wrapper script
+# Provides unified startup for webfsd with configuration file support
+# Used by both rc.local and deployment scripts
+#
+# Configuration:
+#   /etc/webfs/webfsd.conf       - main config file
+#   /etc/webfs/webfsd.conf.d/*.conf - drop-in overrides (sorted alphabetically)
+#
+# Config file format:
+#   One option per line. Comment/uncomment to enable/disable.
+#   -flag           (boolean flag)
+#   -option value   (option with argument)
+#   !-flag          (disable/remove a flag previously set)
+#
+# Drop-in files can override options from main config:
+#   - Same option in drop-in replaces earlier value
+#   - !-flag removes the flag entirely
+#
+# Example:
+#   -p 80
+#   -r /mnt/UDISK/webfs
+#   -j
+#   # -d
+
+set -e
+
+# Configuration locations
+CONFIG_DIR="${WEBFSD_CONFIG_DIR:-/etc/webfs}"
+CONFIG_FILE="${CONFIG_DIR}/webfsd.conf"
+CONFIG_DROP_IN_DIR="${CONFIG_DIR}/webfsd.conf.d"
+ENV_DROP_IN_DIR="${CONFIG_DIR}/env.d"
+
+# Source environment drop-ins (sorted alphabetically)
+if [ -d "$ENV_DROP_IN_DIR" ]; then
+    for env_file in "$ENV_DROP_IN_DIR"/*.env; do
+        [ -f "$env_file" ] && . "$env_file"
+    done
+fi
+
+# Defaults
+WEBFSD_BIN="${WEBFSD_BIN:-/opt/bin/webfsd}"
+
+# Temp file to accumulate options (flag|value format, one per line)
+OPT_FILE=$(mktemp)
+trap 'rm -f "$OPT_FILE"' EXIT
+
+# Function to parse a config file
+# Options are accumulated in OPT_FILE, later values override earlier
+parse_config() {
+    config_file="$1"
+    [ -f "$config_file" ] || return 0
+    
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Trim leading/trailing whitespace
+        line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        
+        # Skip empty lines and comments
+        case "$line" in
+            ''|\#*) continue ;;
+        esac
+        
+        # Handle special options
+        case "$line" in
+            !-*)
+                # Disable/remove a flag: !-j removes -j
+                flag="${line#!}"
+                # Extract just the flag letter(s)
+                flag_name=$(echo "$flag" | sed 's/^\(-[a-zA-Z]*\).*/\1/')
+                # Remove from options file
+                sed -i "/^${flag_name}|/d" "$OPT_FILE"
+                ;;
+            -*)
+                # Webfsd option - extract flag and value, store/override
+                flag_name=$(echo "$line" | sed 's/^\(-[a-zA-Z]*\).*/\1/')
+                value=$(echo "$line" | sed 's/^-[a-zA-Z]* *//')
+                # Remove existing entry for this flag
+                sed -i "/^${flag_name}|/d" "$OPT_FILE"
+                # Add new entry
+                echo "${flag_name}|${value}" >> "$OPT_FILE"
+                ;;
+        esac
+    done < "$config_file"
+}
+
+# Read main configuration file
+parse_config "$CONFIG_FILE"
+
+# Read drop-in configuration files (sorted alphabetically)
+if [ -d "$CONFIG_DROP_IN_DIR" ]; then
+    for drop_in in "$CONFIG_DROP_IN_DIR"/*.conf; do
+        [ -f "$drop_in" ] && parse_config "$drop_in"
+    done
+fi
+
+# Build final args from options file
+WEBFSD_ARGS=""
+WEBFSD_PORT="80"
+while IFS='|' read -r flag value; do
+    if [ -n "$value" ]; then
+        WEBFSD_ARGS="$WEBFSD_ARGS $flag $value"
+        # Extract port number for later use
+        if [ "$flag" = "-p" ]; then
+            WEBFSD_PORT="$value"
+        fi
+    else
+        WEBFSD_ARGS="$WEBFSD_ARGS $flag"
+    fi
+done < "$OPT_FILE"
+
+# Add debug flag if WEBFSD_DEBUG=1 (one-off debug mode)
+if [ "$WEBFSD_DEBUG" = "1" ]; then
+    WEBFSD_ARGS="$WEBFSD_ARGS -d"
+fi
+
+# Trim leading space from args
+WEBFSD_ARGS=$(echo "$WEBFSD_ARGS" | sed 's/^[[:space:]]*//')
+
+# Check if webfsd binary exists
+if [ ! -x "$WEBFSD_BIN" ]; then
+    echo "Error: webfsd binary not found at $WEBFSD_BIN" >&2
+    exit 1
+fi
+
+# Helper function to check if port is in use
+port_in_use() {
+    netstat -tuln 2>/dev/null | grep -q "[.:]$1[[:space:]]"
+}
+
+# Helper function to check if webfsd is running
+# Uses pgrep -f to match process arguments (works even when running via glibc loader)
+# Pattern ends with space to match "webfsd -p ..." but not "webfsd-runner"
+webfsd_running() {
+    pgrep -f "$WEBFSD_BIN " > /dev/null 2>&1
+}
+
+# Helper function to kill webfsd processes
+# Uses pgrep + kill because pkill may not be available (e.g., busybox)
+# Pattern ends with space to match "webfsd -p ..." but not "webfsd-runner"
+kill_webfsd() {
+    pids=$(pgrep -f "$WEBFSD_BIN " 2>/dev/null) || return 0
+    if [ -n "$pids" ]; then
+        kill $1 $pids 2>/dev/null || true
+    fi
+}
+
+# Stop existing webfsd if running
+if webfsd_running; then
+    echo "Stopping existing webfsd..."
+    kill_webfsd
+    # Wait for graceful termination
+    i=0
+    while webfsd_running && [ $i -lt 5 ]; do
+        sleep 1
+        i=$((i + 1))
+    done
+    # Force kill if still running
+    if webfsd_running; then
+        kill_webfsd -9
+    fi
+    # Wait for port to be released
+    echo "Waiting for port $WEBFSD_PORT to be released..."
+    i=0
+    while [ $i -lt 10 ]; do
+        if port_in_use "$WEBFSD_PORT"; then
+            sleep 1
+            i=$((i + 1))
+        else
+            break
+        fi
+    done
+    # Check if port is still in use after timeout
+    if port_in_use "$WEBFSD_PORT"; then
+        echo "Error: Port $WEBFSD_PORT still in use after 10 seconds" >&2
+        exit 1
+    fi
+fi
+
+# Clean up temp file before exec (trap won't run after exec replaces process)
+rm -f "$OPT_FILE"
+
+# Close inherited file descriptors except stdio (0, 1, 2) and sockets
+# This prevents issues with shared pipes from parent processes
+# (e.g., rc.local → dropbear → ssh → shell chain passes fd 10 = pipe
+#  which can cause crashes when those services are killed)
+# We keep sockets open because they belong to the SSH session
+echo "Closing inherited file descriptors..."
+for fd in /proc/self/fd/*; do
+    fd_num="${fd##*/}"
+    # Skip stdin, stdout, stderr (0, 1, 2)
+    if [ "$fd_num" -gt 2 ] 2>/dev/null; then
+        fd_target=$(readlink "$fd" 2>/dev/null || echo "unknown")
+        # Skip sockets (they belong to SSH session)
+        case "$fd_target" in
+            socket:*)
+                echo "  Keeping fd $fd_num -> $fd_target (socket)"
+                ;;
+            *)
+                echo "  Closing fd $fd_num -> $fd_target"
+                eval "exec $fd_num<&-"
+                ;;
+        esac
+    fi
+done
+echo "File descriptors closed."
+
+# Support sideloaded glibc (testbed with musl-based OpenWRT)
+# Set WEBFSD_GLIBC_LOADER and WEBFSD_GLIBC_LIBDIR in the environment
+if [ -n "$WEBFSD_GLIBC_LOADER" ] && [ -x "$WEBFSD_GLIBC_LOADER" ]; then
+    # Sideloaded glibc environment - use glibc loader
+    export LD_LIBRARY_PATH="${WEBFSD_GLIBC_LIBDIR:-/lib/glibc}"
+    exec "$WEBFSD_GLIBC_LOADER" "$WEBFSD_BIN" $WEBFSD_ARGS
+else
+    # Normal glibc environment (real printer) - direct exec
+    exec $WEBFSD_BIN $WEBFSD_ARGS
+fi

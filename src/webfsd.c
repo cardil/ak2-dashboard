@@ -13,6 +13,9 @@
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef __GLIBC__
+#include <execinfo.h>
+#endif
 // #include <sys/signal.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -52,6 +55,7 @@ FILE *logfh = NULL;
 char *userpass = NULL;
 char *userdir = NULL;
 int flushlog = 0;
+int accesslog = 0;
 int do_chroot = 0;
 int usesyslog = 0;
 int have_tty = 1;
@@ -74,6 +78,93 @@ static void catchsig(int sig) {
 }
 
 /* ---------------------------------------------------------------------- */
+/* Crash signal handler - captures crashes and logs diagnostic info       */
+/* Uses async-signal-safe functions only (write, _exit)                   */
+
+/* Helper to write string to fd (async-signal-safe) */
+static void write_str(int fd, const char *s) {
+    if (s) {
+        size_t len = 0;
+        while (s[len]) len++;
+        (void)write(fd, s, len);
+    }
+}
+
+/* Helper to write int as string (async-signal-safe) */
+static void write_int(int fd, int n) {
+    char buf[16];
+    int i = sizeof(buf) - 1;
+    int neg = 0;
+    if (n < 0) { neg = 1; n = -n; }
+    buf[i--] = '\0';
+    do {
+        buf[i--] = '0' + (n % 10);
+        n /= 10;
+    } while (n > 0);
+    if (neg) buf[i--] = '-';
+    write_str(fd, &buf[i + 1]);
+}
+
+static void crash_handler(int sig) {
+    int log_fd = -1;
+    const char *signame;
+    void *bt_buffer[32];
+    int bt_size = 0;
+
+    /* Map signal number to name */
+    switch(sig) {
+        case SIGSEGV: signame = "SIGSEGV (Segmentation fault)"; break;
+        case SIGBUS:  signame = "SIGBUS (Bus error)"; break;
+        case SIGABRT: signame = "SIGABRT (Aborted)"; break;
+        case SIGFPE:  signame = "SIGFPE (Floating point exception)"; break;
+        case SIGILL:  signame = "SIGILL (Illegal instruction)"; break;
+        default:      signame = "Unknown signal"; break;
+    }
+
+    /* Try to open log file directly (async-signal-safe) */
+    if (logfile != NULL) {
+        log_fd = open(logfile, O_WRONLY | O_APPEND | O_CREAT, 0644);
+    }
+    if (log_fd < 0) {
+        log_fd = STDERR_FILENO;
+    }
+
+    /* Write crash header */
+    write_str(log_fd, "\n========== CRASH REPORT ==========\n");
+    write_str(log_fd, "FATAL: webfsd crashed with signal ");
+    write_int(log_fd, sig);
+    write_str(log_fd, " (");
+    write_str(log_fd, signame);
+    write_str(log_fd, ")\n");
+
+    /* Try to get backtrace - backtrace_symbols_fd is async-signal-safe */
+#ifdef __GLIBC__
+    bt_size = backtrace(bt_buffer, 32);
+    if (bt_size > 0) {
+        write_str(log_fd, "\nBacktrace:\n");
+        backtrace_symbols_fd(bt_buffer, bt_size, log_fd);
+    }
+#else
+    write_str(log_fd, "(Backtrace not available - requires glibc)\n");
+    (void)bt_buffer;
+    (void)bt_size;
+#endif
+
+    write_str(log_fd, "\nPlease report this crash at:\n");
+    write_str(log_fd, "https://github.com/cardil/ak2-dashboard/issues\n");
+    write_str(log_fd, "===================================\n\n");
+
+    /* Close log if we opened it */
+    if (log_fd != STDERR_FILENO) {
+        close(log_fd);
+    }
+
+    /* Re-raise signal with default handler for core dump (if enabled) */
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+
+/* ---------------------------------------------------------------------- */
 
 static void
 usage(char *name) {
@@ -82,7 +173,7 @@ usage(char *name) {
     struct group *gr;
 
     h = strrchr(name, '/');
-    fprintf(stderr,
+    LOG(
             "This is a lightweight http server for static content\n"
             "\n"
             "usage: %s [ options ]\n"
@@ -98,6 +189,7 @@ usage(char *name) {
             "  -c n     set max. allowed connections        [%i]\n"
             "  -O CORS  set CORS header                     [%s]\n"
             "  -a n     set max. cached dirs                [%i]\n"
+            "  -A       enable access logging               [%s]\n"
             "  -j       disable directory listings          [%s]\n"
             "  -p port  use tcp-port >port<                 [%s]\n"
             "  -r dir   document root is >dir<              [%s]\n"
@@ -107,7 +199,7 @@ usage(char *name) {
             "  -N host  same as above + UseCanonicalName\n"
             "  -i ip    bind to IP-address >ip<             [%s]\n"
             "  -v       enable virtual hosts                [%s]\n"
-            "  -l log   write access log to file >log<      [%s]\n"
+            "  -l log   write log to file >log<             [%s]\n"
             "  -L log   same as above + flush every line\n"
             "  -m file  read mime types from >file<         [%s]\n"
             "  -k file  use >file< as pidfile               [%s]\n"
@@ -124,6 +216,7 @@ usage(char *name) {
             timeout, max_conn,
             cors ? cors : "none",
             max_dircache,
+            accesslog ? "on" : "off",
             no_listing ? "on" : "off",
             listen_port, doc_root,
             indexhtml ? indexhtml : "index.html",
@@ -136,7 +229,7 @@ usage(char *name) {
     if (getuid() == 0) {
         pw = getpwuid(0);
         gr = getgrgid(getgid());
-        fprintf(stderr,
+        LOG(
                 "  -u user  run as user >user<                  [%s]\n"
                 "  -g group run as group >group<                [%s]\n",
                 pw ? pw->pw_name : "???",
@@ -171,17 +264,16 @@ static void create_root_doc_if_required(void) {
 
     if (stat("/user/webfs/profiles", &st) == -1) {
         // profiles folder does not exist
-        // create all profiles with the current configs
+        // create folder and one "Backup" profile with current configs
         mkdir("/user/webfs/profiles", 0700);
-        char buf[64];
-        int i;
-        for (i = 1; i < 10; i++) {
-            sprintf(buf, "/user/webfs/profiles/%d", i);
-            mkdir(buf, 0700);
-            sprintf(buf, "cp /user/printer*.cfg /user/webfs/profiles/%d", i);
-            system(buf);
-            sprintf(buf, "cp /user/unmodifiable.cfg /user/webfs/profiles/%d", i);
-            system(buf);
+        mkdir("/user/webfs/profiles/1", 0700);
+        system("cp /user/printer*.cfg /user/webfs/profiles/1");
+        system("cp /user/unmodifiable.cfg /user/webfs/profiles/1");
+        // Create metadata.json with name "Backup"
+        FILE *f = fopen("/user/webfs/profiles/1/metadata.json", "w");
+        if (f) {
+            fprintf(f, "{\"name\": \"Backup\"}");
+            fclose(f);
         }
     }
 
@@ -208,11 +300,11 @@ static void create_root_doc_if_required(void) {
 
 static void run_as(int id) {
     if (-1 == seteuid(id)) {
-        fprintf(stderr, "seteuid(%d): %s\n", id, strerror(errno));
+        LOG( "seteuid(%d): %s\n", id, strerror(errno));
         exit(1);
     }
     if (debug)
-        fprintf(stderr, "run_as: uid=%d euid=%d\n", getuid(), geteuid());
+        LOG( "run_as: uid=%d euid=%d\n", getuid(), geteuid());
 }
 
 static void
@@ -221,7 +313,7 @@ fix_ug(void) {
     struct group *gr = NULL;
 
     /* root is allowed to use any uid/gid,
-     * others will get their real uid/gid */
+    * others will get their real uid/gid */
     if (0 == getuid() && strlen(user) > 0) {
         if (NULL == (pw = getpwnam(user)))
             pw = getpwuid(atoi(user));
@@ -245,7 +337,7 @@ fix_ug(void) {
     }
 
     /* chroot to $DOCUMENT_ROOT (must be done here as getpwuid needs
-             /etc and chroot works as root only) */
+            /etc and chroot works as root only) */
     if (do_chroot) {
         chdir(doc_root);
         if (-1 == chroot(doc_root)) {
@@ -275,7 +367,7 @@ fix_ug(void) {
     strncpy(user, pw->pw_name, 16);
 
     if (debug)
-        fprintf(stderr, "fix_ug: uid=%d euid=%d / gid=%d egid=%d\n",
+        LOG( "fix_ug: uid=%d euid=%d / gid=%d egid=%d\n",
                 getuid(), geteuid(), getgid(), getegid());
 }
 
@@ -284,6 +376,9 @@ fix_ug(void) {
 static void
 access_log(struct REQUEST *req, time_t now) {
     char timestamp[32];
+
+    if (!accesslog)
+        return;
 
     DO_LOCK(lock_logfile);
     if (NULL == logfh) {
@@ -317,13 +412,13 @@ access_log(struct REQUEST *req, time_t now) {
 }
 
 /*
- * loglevel usage
- *   ERR    : fatal errors (which are followed by exit(1))
- *   WARNING: this should'nt happen error (oom, ...)
- *   NOTICE : start/stop of the daemon
- *   INFO   : "normal" errors (canceled downloads, timeouts,
- *            stuff what happens all the time)
- */
+* loglevel usage
+*   ERR    : fatal errors (which are followed by exit(1))
+*   WARNING: this should'nt happen error (oom, ...)
+*   NOTICE : start/stop of the daemon
+*   INFO   : "normal" errors (canceled downloads, timeouts,
+*            stuff what happens all the time)
+*/
 
 static void
 syslog_init(void) {
@@ -333,16 +428,16 @@ syslog_init(void) {
 static void
 syslog_start(void) {
     syslog(LOG_NOTICE,
-           "started (listen on %s:%d, root=%s, user=%s, group=%s)\n",
-           listen_ip ? listen_ip : "*",
-           tcp_port, doc_root, user, group);
+          "started (listen on %s:%d, root=%s, user=%s, group=%s)\n",
+          listen_ip ? listen_ip : "*",
+          tcp_port, doc_root, user, group);
 }
 
 static void
 syslog_stop(void) {
     if (termsig)
         syslog(LOG_NOTICE, "stopped on signal %d (%s)\n",
-               termsig, strsignal(termsig));
+              termsig, strsignal(termsig));
     else
         syslog(LOG_NOTICE, "stopped\n");
     closelog();
@@ -355,7 +450,7 @@ void xperror(int loglevel, char *txt, char *peerhost) {
         if (NULL == peerhost)
             perror(txt);
         else
-            fprintf(stderr, "%s: %s (peer=%s)\n", txt, strerror(errno),
+            LOG( "%s: %s (peer=%s)\n", txt, strerror(errno),
                     peerhost);
     }
     if (usesyslog) {
@@ -363,7 +458,7 @@ void xperror(int loglevel, char *txt, char *peerhost) {
             syslog(loglevel, "%s: %s\n", txt, strerror(errno));
         else
             syslog(loglevel, "%s: %s (peer=%s)\n", txt, strerror(errno),
-                   peerhost);
+                  peerhost);
     }
 }
 
@@ -372,9 +467,9 @@ void xerror(int loglevel, char *txt, char *peerhost) {
         return;
     if (have_tty) {
         if (NULL == peerhost)
-            fprintf(stderr, "%s\n", txt);
+            LOG( "%s\n", txt);
         else
-            fprintf(stderr, "%s (peer=%s)\n", txt, peerhost);
+            LOG( "%s (peer=%s)\n", txt, peerhost);
     }
     if (usesyslog) {
         if (NULL == peerhost)
@@ -401,7 +496,7 @@ mainloop(void *thread_arg) {
         if (got_sighup) {
             if (NULL != logfile && 0 != strcmp(logfile, "-")) {
                 if (debug)
-                    fprintf(stderr, "got SIGHUP, reopen logfile %s\n", logfile);
+                    LOG( "got SIGHUP, reopen logfile %s\n", logfile);
                 DO_LOCK(lock_logfile);
                 if (logfh)
                     fclose(logfh);
@@ -456,7 +551,7 @@ mainloop(void *thread_arg) {
             if (NULL == req) {
                 /* oom: let the request sit in the listen queue */
                 if (debug)
-                    fprintf(stderr, "oom\n");
+                    LOG( "oom\n");
             } else {
                 memset(req, 0, sizeof(struct REQUEST));
                 if (-1 == (req->fd = accept(slisten, NULL, NULL))) {
@@ -474,7 +569,7 @@ mainloop(void *thread_arg) {
                     conns = req;
                     curr_conn++;
                     if (debug)
-                        fprintf(stderr, "%03d: new request (%d)\n", req->fd, curr_conn);
+                        LOG( "%03d: new request (%d)\n", req->fd, curr_conn);
                     length = sizeof(req->peer);
                     if (-1 == getpeername(req->fd, (struct sockaddr *)&(req->peer), &length)) {
                         xperror(LOG_WARNING, "getpeername", NULL);
@@ -484,7 +579,7 @@ mainloop(void *thread_arg) {
                                 req->peerhost, 64, req->peerserv, 8,
                                 NI_NUMERICHOST | NI_NUMERICSERV);
                     if (debug)
-                        fprintf(stderr, "%03d: connect from (%s)\n",
+                        LOG( "%03d: connect from (%s)\n",
                                 req->fd, req->peerhost);
                 }
             }
@@ -518,7 +613,7 @@ mainloop(void *thread_arg) {
                 if (now > req->ping + keepalive_time ||
                     curr_conn > max_conn * 9 / 10) {
                     if (debug)
-                        fprintf(stderr, "%03d: keepalive timeout\n", req->fd);
+                        LOG( "%03d: keepalive timeout\n", req->fd);
                     req->state = STATE_CLOSE;
                 }
             } else {
@@ -571,12 +666,24 @@ mainloop(void *thread_arg) {
                 }
                 list_free(&req->header);
                 memset(req->mtime, 0, sizeof(req->mtime));
+                memset(req->ctime, 0, sizeof(req->ctime));
 
                 if (req->bfd != -1) {
                     close(req->bfd);
                     req->bfd = -1;
                 }
+                /* Free dynamically allocated body (from get_dir_json) */
+                if (req->body && req->body_is_malloced) {
+                    free(req->body);
+                }
                 req->body = NULL;
+                req->body_is_malloced = 0;
+                req->mime = NULL;
+                /* Free request body from PUT/POST requests */
+                if (req->req_body) {
+                    free(req->req_body);
+                    req->req_body = NULL;
+                }
                 req->written = 0;
                 req->head_only = 0;
                 req->rh = 0;
@@ -592,7 +699,7 @@ mainloop(void *thread_arg) {
                 if (req->hdata == req->lreq) {
                     /* ok, wait for the next one ... */
                     if (debug)
-                        fprintf(stderr, "%03d: keepalive wait\n", req->fd);
+                        LOG( "%03d: keepalive wait\n", req->fd);
                     req->state = STATE_KEEPALIVE;
                     req->hdata = 0;
                     req->lreq = 0;
@@ -600,14 +707,14 @@ mainloop(void *thread_arg) {
                     if (1 == req->tcp_cork) {
                         req->tcp_cork = 0;
                         if (debug)
-                            fprintf(stderr, "%03d: tcp_cork=%d\n", req->fd, req->tcp_cork);
+                            LOG( "%03d: tcp_cork=%d\n", req->fd, req->tcp_cork);
                         setsockopt(req->fd, SOL_TCP, TCP_CORK, &req->tcp_cork, sizeof(int));
                     }
 #endif
                 } else {
                     /* there is a pipelined request in the queue ... */
                     if (debug)
-                        fprintf(stderr, "%03d: keepalive pipeline\n", req->fd);
+                        LOG( "%03d: keepalive pipeline\n", req->fd);
                     req->state = STATE_READ_HEADER;
                     memmove(req->hreq, req->hreq + req->lreq,
                             req->hdata - req->lreq);
@@ -630,7 +737,7 @@ mainloop(void *thread_arg) {
                     free_dir(req->dir);
                 curr_conn--;
                 if (debug)
-                    fprintf(stderr, "%03d: done (%d)\n", req->fd, curr_conn);
+                    LOG( "%03d: done (%d)\n", req->fd, curr_conn);
                 /* unlink from list */
                 tmp = req;
                 if (prev == NULL) {
@@ -650,6 +757,14 @@ mainloop(void *thread_arg) {
                 if (tmp->r_hlen)
                     free(tmp->r_hlen);
                 list_free(&tmp->header);
+                /* Free dynamically allocated body (from get_dir_json) */
+                if (tmp->body && tmp->body_is_malloced) {
+                    free(tmp->body);
+                }
+                /* Free request body from PUT/POST requests */
+                if (tmp->req_body) {
+                    free(tmp->req_body);
+                }
                 free(tmp);
             } else {
                 prev = req;
@@ -687,10 +802,13 @@ int main(int argc, char *argv[]) {
     /* parse options */
     for (;;) {
         if (-1 == (c = getopt(argc, argv,
-                              "hvsdF46jS"
+                              "hvsdF46jSA"
                               "O:r:R:f:p:n:N:i:t:c:a:u:g:l:L:m:y:b:k:e:x:C:P:~:")))
             break;
         switch (c) {
+            case 'A':
+                accesslog++;
+                break;
             case 'h':
                 usage(argv[0]);
                 break;
@@ -798,7 +916,7 @@ int main(int argc, char *argv[]) {
         ask.ai_family = PF_INET6;
         if (0 != (rc = getaddrinfo(listen_ip, listen_port, &ask, &res))) {
             if (debug)
-                fprintf(stderr, "getaddrinfo (ipv6): %s\n", gai_strerror(rc));
+                LOG( "getaddrinfo (ipv6): %s\n", gai_strerror(rc));
         } else {
             if (-1 == (slisten = socket(res->ai_family, res->ai_socktype,
                                         res->ai_protocol)) &&
@@ -811,7 +929,7 @@ int main(int argc, char *argv[]) {
     if (-1 == slisten && v4) {
         ask.ai_family = PF_INET;
         if (0 != (rc = getaddrinfo(listen_ip, listen_port, &ask, &res))) {
-            fprintf(stderr, "getaddrinfo (ipv4): %s\n", gai_strerror(rc));
+            LOG( "getaddrinfo (ipv4): %s\n", gai_strerror(rc));
             exit(1);
         }
         if (-1 == (slisten = socket(res->ai_family, res->ai_socktype,
@@ -830,9 +948,9 @@ int main(int argc, char *argv[]) {
     if (res->ai_canonname)
         strcpy(server_host, res->ai_canonname);
     if (0 != (rc = getnameinfo((struct sockaddr *)&ss, ss_len,
-                               host, INET6_ADDRSTRLEN, serv, 15,
-                               NI_NUMERICHOST | NI_NUMERICSERV))) {
-        fprintf(stderr, "getnameinfo: %s\n", gai_strerror(rc));
+                              host, INET6_ADDRSTRLEN, serv, 15,
+                              NI_NUMERICHOST | NI_NUMERICSERV))) {
+        LOG( "getnameinfo: %s\n", gai_strerror(rc));
         exit(1);
     }
 
@@ -886,14 +1004,14 @@ int main(int argc, char *argv[]) {
 
     if (pidfile) {
         if (-1 == (pid = open(pidfile, O_WRONLY | O_CREAT | O_EXCL, 0600))) {
-            fprintf(stderr, "open %s: %s\n", pidfile, strerror(errno));
+            LOG( "open %s: %s\n", pidfile, strerror(errno));
             exit(1);
         }
         close_on_exec(pid);
     }
 
     if (debug) {
-        fprintf(stderr,
+        LOG(
                 "http server started\n"
                 "  ipv6  : %s\n"
                 "  node  : %s\n"
@@ -904,6 +1022,8 @@ int main(int argc, char *argv[]) {
                 "  group : %s\n",
                 res->ai_family == PF_INET6 ? "yes" : "no",
                 server_host, host, tcp_port, doc_root, user, group);
+    } else {
+        LOG( "webfsd started on port %d\n", tcp_port);
     }
 
     /* run as daemon - detach from terminal */
@@ -945,6 +1065,14 @@ int main(int argc, char *argv[]) {
     if (debug)
         sigaction(SIGINT, &act, &old);
 
+    /* setup crash handlers for diagnostics */
+    act.sa_handler = crash_handler;
+    sigaction(SIGSEGV, &act, &old);
+    sigaction(SIGBUS, &act, &old);
+    sigaction(SIGABRT, &act, &old);
+    sigaction(SIGFPE, &act, &old);
+    sigaction(SIGILL, &act, &old);
+
     // verify if the copy of the doc root exists
     // if not create it
     create_root_doc_if_required();
@@ -956,6 +1084,6 @@ int main(int argc, char *argv[]) {
     if (pidfile)
         unlink(pidfile);
     if (debug)
-        fprintf(stderr, "bye...\n");
+        LOG( "bye...\n");
     exit(0);
 }

@@ -1,0 +1,39 @@
+# E2E testbed only needs specific files
+# Exclude everything by default, then include what's needed
+
+# Large directories
+src/
+frontend/
+.git/
+images/
+.ai/
+
+# Node modules
+**/node_modules/
+e2e/node_modules/
+
+# Build artifacts
+**/*.o
+**/*.a
+**/*.zip
+
+# Test results and reports
+e2e/test-results/
+e2e/playwright-report/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation
+*.md
+!e2e/scripts/*.md
+
+# Other unnecessary files
+.github/
+.continue/
+.editorconfig
+.gitignore
+package-lock.json

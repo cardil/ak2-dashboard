@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <pthread.h>
 
+#include "api.h"
 #include "httpd.h"
 
 typedef uint8_t BYTE;
@@ -304,7 +305,7 @@ int system_with_output(const char *cmd, int line_number) {
     /* Read the output a line at a time - output it. */
     while (fgets(system_buffer, SYSTEM_BUFFER_MAX, fp) != NULL) {
         if (debug) {
-            fprintf(stderr, "+++ system: %s\n", system_buffer);
+            LOG( "+++ system: %s\n", system_buffer);
         }
         n++;
         if (n == line_number)
@@ -680,14 +681,10 @@ void apply_precision(double *mesh, double precision) {
 // mesh_config[] = copy of the mesh as shown in the printer config file
 // mesh_values[] = parsed values
 // mesh_matrix[] = formatted matrix for use in the 3d visualizer
-int read_mesh_from_printer_config(void) {
-    const char *k2_cfg = NULL;
-
+int read_mesh_from_config_file(const char *config_path) {
     int result = 2;
 
-    int rr = detect_printer_defaults(NULL, &k2_cfg, NULL, NULL);
-
-    if (rr) {
+    if (config_path == NULL) {
         return 1;
     } else {
         FILE *file;
@@ -708,7 +705,7 @@ int read_mesh_from_printer_config(void) {
         z_offset = 0.0;
 
         // read the file line by line
-        file = fopen(k2_cfg, "r");
+        file = fopen(config_path, "r");
         if (file) {
             while (1) {
                 read = getline(&b, &len, file);
@@ -735,20 +732,20 @@ int read_mesh_from_printer_config(void) {
 
                     result = 0;
                 } else if (b[0] == 'p' && b[1] == 'r' && b[2] == 'o' && b[3] == 'b' && b[4] == 'e' && b[5] == '_' && b[6] == 'c' &&
-                           b[7] == 'o' && b[8] == 'u' && b[9] == 'n' && b[10] == 't' && b[11] == ' ' && b[12] == ':' && b[13] == ' ') {
+                          b[7] == 'o' && b[8] == 'u' && b[9] == 'n' && b[10] == 't' && b[11] == ' ' && b[12] == ':' && b[13] == ' ') {
                     sscanf(&b[14], "%d,%d", &probe_count_x, &probe_count_y);
                 } else if (b[0] == 'x' && b[1] == '_' && b[2] == 'c' && b[3] == 'o' && b[4] == 'u' &&
-                           b[5] == 'n' && b[6] == 't' && b[7] == ' ' && b[8] == ':' && b[9] == ' ') {
+                          b[5] == 'n' && b[6] == 't' && b[7] == ' ' && b[8] == ':' && b[9] == ' ') {
                     sscanf(&b[10], "%d", &x_count);
                 } else if (b[0] == 'y' && b[1] == '_' && b[2] == 'c' && b[3] == 'o' && b[4] == 'u' &&
-                           b[5] == 'n' && b[6] == 't' && b[7] == ' ' && b[8] == ':' && b[9] == ' ') {
+                          b[5] == 'n' && b[6] == 't' && b[7] == ' ' && b[8] == ':' && b[9] == ' ') {
                     sscanf(&b[10], "%d", &y_count);
                 } else if (b[0] == 'z' && b[1] == '_' && b[2] == 'o' && b[3] == 'f' && b[4] == 'f' &&
-                           b[5] == 's' && b[6] == 'e' && b[7] == 't' && b[8] == ' ' && b[9] == ':' && b[10] == ' ') {
+                          b[5] == 's' && b[6] == 'e' && b[7] == 't' && b[8] == ' ' && b[9] == ':' && b[10] == ' ') {
                     z_offset = atof(&b[11]);
                 } else if (b[0] == 'b' && b[1] == 'e' && b[2] == 'd' && b[3] == '_' && b[4] == 'm' &&
-                           b[5] == 'e' && b[6] == 's' && b[7] == 'h' && b[8] == '_' && b[9] == 't' && b[10] == 'e' &&
-                           b[11] == 'm' && b[12] == 'p' && b[13] == ' ' && b[14] == ':' && b[15] == ' ') {
+                          b[5] == 'e' && b[6] == 's' && b[7] == 'h' && b[8] == '_' && b[9] == 't' && b[10] == 'e' &&
+                          b[11] == 'm' && b[12] == 'p' && b[13] == ' ' && b[14] == ':' && b[15] == ' ') {
                     bed_temp = atoi(&b[16]);
                 }
             }
@@ -758,6 +755,16 @@ int read_mesh_from_printer_config(void) {
         }
     }
     return result;
+}
+
+// Wrapper that reads from the default printer config
+int read_mesh_from_printer_config(void) {
+    const char *k2_cfg = NULL;
+    int rr = detect_printer_defaults(NULL, &k2_cfg, NULL, NULL);
+    if (rr) {
+        return 1;
+    }
+    return read_mesh_from_config_file(k2_cfg);
 }
 
 char static_template_buffer[1024];
@@ -780,82 +787,101 @@ int get_ssh_status(void) {
     return ssh_status;
 }
 
-// update /mnt/UDISK/webfs/api/info.json
-int update_api(void) {
-    struct sysinfo s_info;
-    int error = sysinfo(&s_info);
-    U32 uptime = 0;
-    if (!error) {
-        uptime = s_info.uptime;
+// Read a U64 value from a file (used for cgroup memory files)
+// Returns 0 on success, -1 on failure
+static int read_u64_from_file(const char *path, U64 *value) {
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+    char buf[64];
+    if (fgets(buf, sizeof(buf), f) == NULL) {
+        fclose(f);
+        return -1;
     }
-    int ut_h, ut_m, ut_s;
-    ut_h = uptime / 3600;
-    ut_m = (uptime / 60) % 60;
-    ut_s = uptime % 60;
-    U32 total_mem = sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
-    U32 free_mem = sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE);
-    U32 free_mem_per = (free_mem * 100) / total_mem;
-    U32 cpu_use = 0;
-    U32 cpu_usr_use = 0;
-    U32 cpu_sys_use = 0;
-    U32 cpu_idle = 0;
-    char cpu[10];
-    int t0, t1, t2, t3, t4, t5, t6, t7, t8, t9;
-    system_with_output("cat /proc/stat", 1);
-    int n = sscanf(system_buffer, "%s %d %d %d %d %d %d %d %d %d %d", cpu, &t0, &t1, &t2, &t3, &t4, &t5, &t6, &t7, &t8, &t9);
-    if (n == 11) {
-        cpu_use = ((t0 + t2) * 100) / (t0 + t2 + t3);
-        cpu_usr_use = (t0 * 100) / (t0 + t2 + t3);
-        cpu_sys_use = (t2 * 100) / (t0 + t2 + t3);
-        cpu_idle = (t3 * 100) / (t0 + t2 + t3);
+    fclose(f);
+    // Check for "max" which means no limit
+    if (strncmp(buf, "max", 3) == 0) {
+        *value = 0;  // signal no limit
+        return -1;
     }
-    int ssh_status = get_ssh_status();
-    sprintf(static_template_buffer, "{\"api_ver\":1, \"total_mem\":%d, \"free_mem\":%d, \"free_mem_per\":%d, \"cpu_use\":%d, \"cpu_usr_use\":%d, \"cpu_sys_use\":%d, \"cpu_idle\":%d, \"ssh_status\":%d, \"uptime\": \"%02d:%02d:%02d\"}", total_mem, free_mem, free_mem_per, cpu_use, cpu_usr_use, cpu_sys_use, cpu_idle, ssh_status, ut_h, ut_m, ut_s);
-    // export buffer to file
-    return custom_copy_file(NULL, "/mnt/UDISK/webfs/api/info.json", "wb", static_template_buffer);
+    *value = strtoull(buf, NULL, 10);
+    return 0;
 }
 
-// process action query and update /mnt/UDISK/webfs/api/do.json
-int control_api(config_option_t query) {
-    int result = -1;
-    char *action = get_key_value(query, "action", "unknown");
-    if (!strcmp(action, "reboot")) {
-        system_with_output("reboot", 1);
-        result = 1;
-    }
-    if (!strcmp(action, "poweroff")) {
-        system_with_output("poweroff", 1);
-        result = 1;
-    }
-    if (!strcmp(action, "log_clear")) {
-        system("cat /dev/null > /mnt/UDISK/log");
-        result = 1;
-    }
-    if (!strcmp(action, "ssh_start")) {
-        int ssh = get_ssh_status();
-        result = 0;
-        if (ssh == 1) {
-            system_with_output("/opt/etc/init.d/S51dropbear start 2>&1", 1);
-            result = 2;
-        } else {
-            if (ssh == 2)
-                result = 2;
+// Read a named U64 value from a cgroup memory.stat file (e.g. "inactive_file")
+// Returns 0 on success, -1 on failure
+static int read_u64_from_stat(const char *path, const char *key, U64 *value) {
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+    char line[128];
+    size_t key_len = strlen(key);
+    int found = -1;
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, key, key_len) == 0 && line[key_len] == ' ') {
+            *value = strtoull(line + key_len + 1, NULL, 10);
+            found = 0;
+            break;
         }
     }
-    if (!strcmp(action, "ssh_stop")) {
-        int ssh = get_ssh_status();
-        result = 0;
-        if (ssh == 2) {
-            system_with_output("/opt/etc/init.d/S51dropbear stop 2>&1", 1);
-            result = 1;
-        } else {
-            if (ssh == 1)
-                result = 1;
-        }
-    }
-    sprintf(static_template_buffer, "{\"api_ver\":1, \"result\":%d}", result);
-    return custom_copy_file(NULL, "/mnt/UDISK/webfs/api/do.json", "wb", static_template_buffer);
+    fclose(f);
+    return found;
 }
+
+// Get memory info, preferring cgroup v2 files for container awareness.
+// For cgroup path: subtracts inactive_file from memory.current so that
+// reclaimable page cache is not counted as "used" memory.
+// For bare metal: reads MemAvailable from /proc/meminfo (preferred) which
+// accounts for buffers and cache, falling back to MemTotal-MemFree-Buffers-Cached.
+void get_memory_info(U64 *total_mem, U64 *free_mem) {
+    U64 cgroup_max = 0;
+    U64 cgroup_current = 0;
+
+    // Try cgroup v2 first (container-aware)
+    int has_max = (read_u64_from_file("/sys/fs/cgroup/memory.max", &cgroup_max) == 0);
+    int has_current = (read_u64_from_file("/sys/fs/cgroup/memory.current", &cgroup_current) == 0);
+
+    if (has_max && has_current && cgroup_max > 0) {
+        // Subtract inactive_file (reclaimable page cache) from current usage.
+        // This matches what the kernel reports as "available" in cgroup context.
+        U64 inactive_file = 0;
+        read_u64_from_stat("/sys/fs/cgroup/memory.stat", "inactive_file", &inactive_file);
+        U64 used = (cgroup_current > inactive_file) ? (cgroup_current - inactive_file) : 0;
+        *total_mem = cgroup_max;
+        *free_mem = (cgroup_max > used) ? (cgroup_max - used) : 0;
+    } else {
+        // Fall back to /proc/meminfo for bare metal.
+        // Prefer MemAvailable (accounts for buffers/cache); fall back to
+        // MemTotal - MemFree - Buffers - Cached if MemAvailable is absent.
+        FILE *fp = fopen("/proc/meminfo", "r");
+        if (fp) {
+            U64 mem_total = 0, mem_free = 0, mem_available = 0;
+            U64 buffers = 0, cached = 0;
+            int has_available = 0;
+            char line[128];
+            while (fgets(line, sizeof(line), fp)) {
+                unsigned long long val = 0;
+                if (sscanf(line, "MemTotal: %llu kB", &val) == 1)       mem_total = val * 1024;
+                else if (sscanf(line, "MemFree: %llu kB", &val) == 1)   mem_free = val * 1024;
+                else if (sscanf(line, "MemAvailable: %llu kB", &val) == 1) { mem_available = val * 1024; has_available = 1; }
+                else if (sscanf(line, "Buffers: %llu kB", &val) == 1)   buffers = val * 1024;
+                else if (sscanf(line, "Cached: %llu kB", &val) == 1)    cached = val * 1024;
+            }
+            fclose(fp);
+            *total_mem = mem_total;
+            if (has_available) {
+                *free_mem = mem_available;
+            } else {
+                U64 used = mem_total > (mem_free + buffers + cached)
+                  ? mem_total - mem_free - buffers - cached : 0;
+                *free_mem = mem_total > used ? mem_total - used : 0;
+            }
+        } else {
+            *total_mem = 0;
+            *free_mem = 0;
+        }
+    }
+}
+
+
 
 char *leveling_template_callback(char key) {
     // response code replacement
@@ -1158,6 +1184,7 @@ int update_printer_config_file(const char *config_file, const char *parameter_na
     char par[128];
     int par_size;
     char eol[2];
+    int match_found = 0;
 
     // make a copy of the original config file
     custom_copy_file(config_file, "/user/printer-config.bak", "wb", NULL);
@@ -1184,6 +1211,10 @@ int update_printer_config_file(const char *config_file, const char *parameter_na
                 // line processing...
                 if (strncmp(b, par, par_size) == 0) {
                     // this is the line with the requested parameter, modify it
+                    match_found = 1;
+                    if (debug)
+                        LOG( "update_printer_config_file: MATCH! param='%s' old_line='%.*s' new_value='%s'\n",
+                                parameter_name, n - 1, b, replacement_value);
                     fwrite(par, 1, par_size, ofile);
                     fwrite(replacement_value, 1, strlen(replacement_value), ofile);
                     fwrite(eol, 1, 1, ofile);
@@ -1192,6 +1223,9 @@ int update_printer_config_file(const char *config_file, const char *parameter_na
                     fwrite(b, 1, n, ofile);
                 }
             }
+            if (debug && !match_found)
+                LOG( "update_printer_config_file: NO MATCH for param='%s' in file='%s'\n",
+                        parameter_name, config_file);
             fclose(ifile);
             fflush(ofile);
             fclose(ofile);
@@ -1201,6 +1235,8 @@ int update_printer_config_file(const char *config_file, const char *parameter_na
             remove(config_file);
             custom_copy_file("/user/printer-config.tmp", config_file, "wb", NULL);
             remove("/user/printer-config.tmp");
+            // Log config modification (always, not just debug)
+            LOG( "Config updated: %s [%s]\n", config_file, parameter_name);
             return 0;
         } else {
             fclose(ifile);
@@ -1218,35 +1254,35 @@ static pthread_mutex_t webcam_mutex = PTHREAD_MUTEX_INITIALIZER;
 void *webcam_capture_thread(void *arg) {
     pthread_detach(pthread_self());
 
-    if (debug) fprintf(stderr, "+++ webcam thread: starting\n");
+    if (debug) LOG( "+++ webcam thread: starting\n");
     if (v_open_camera() != 0) {
-        if (debug) fprintf(stderr, "--- webcam thread: v_open_camera failed\n");
+        if (debug) LOG( "--- webcam thread: v_open_camera failed\n");
         pthread_mutex_lock(&webcam_mutex);
         webcam_thread_running = 0;
         pthread_mutex_unlock(&webcam_mutex);
         return NULL;
     }
-    if (debug) fprintf(stderr, "+++ webcam thread: v_open_camera successful\n");
+    if (debug) LOG( "+++ webcam thread: v_open_camera successful\n");
 
     while (1) {
         pthread_mutex_lock(&webcam_mutex);
         time_t now = time(NULL);
         if (now - last_webcam_request_time > 2) {
-            if (debug) fprintf(stderr, "+++ webcam thread: timeout, exiting\n");
+            if (debug) LOG( "+++ webcam thread: timeout, exiting\n");
             webcam_thread_running = 0;
             pthread_mutex_unlock(&webcam_mutex);
             break;
         }
         pthread_mutex_unlock(&webcam_mutex);
 
-        if (debug) fprintf(stderr, "+++ webcam thread: capturing frame\n");
+        if (debug) LOG( "+++ webcam thread: capturing frame\n");
         // capture one frame to the file "/tmp/cam.jpg"
         int result = v_capture_frame_to_file("/tmp/cam.tmp");
         if (result == 0) {
-            if (debug) fprintf(stderr, "+++ webcam thread: capture successful\n");
+            if (debug) LOG( "+++ webcam thread: capture successful\n");
             rename("/tmp/cam.tmp", "/tmp/cam.jpg");
         } else {
-            if (debug) fprintf(stderr, "--- webcam thread: capture failed, result: %d\n", result);
+            if (debug) LOG( "--- webcam thread: capture failed, result: %d\n", result);
             // errors, use the default image
             custom_copy_file("/mnt/UDISK/webfs/webcam/default.jpg", "/tmp/cam.jpg", "wb", NULL);
         }
@@ -1254,9 +1290,9 @@ void *webcam_capture_thread(void *arg) {
         usleep(75000);  // 75ms
     }
 
-    if (debug) fprintf(stderr, "+++ webcam thread: closing camera\n");
+    if (debug) LOG( "+++ webcam thread: closing camera\n");
     v_close_camera();
-    if (debug) fprintf(stderr, "+++ webcam thread: exited\n");
+    if (debug) LOG( "+++ webcam thread: exited\n");
     return NULL;
 }
 
@@ -1279,7 +1315,7 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
     }
 
     if (debug) {
-        fprintf(stderr, "+++ requested file: %s\n", filename_str);
+        LOG( "+++ process_custom_pages: checking for custom pages for request path: %s\n", req->path);
     }
 
     if ((strstr(filename_str, "/mnt/UDISK/webfs/files/"))) {
@@ -1292,62 +1328,18 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
         req->cache_turn_off = 'Y';
     }
 
-    // ----------------------------- access to the 3d visualizer index.html -----------------------------
-    if ((!strcmp(filename_str, "/mnt/UDISK/webfs/mesh/index.html"))) {
-        // turn off the cache
-        req->cache_turn_off = 'Y';
-
-        int rr = read_mesh_from_printer_config();
-
-        if (rr == 1) {
-            custom_copy_file(NULL, "/mnt/UDISK/webfs/mesh/index.html", "wb", "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><title>3D-Visualizer</title></head><body>Missing printer configuration file! Try to upload it from a backup.</body></html>");
-        } else {
-            if (rr == 2) {
-                custom_copy_file(NULL, "/mnt/UDISK/webfs/mesh/index.html", "wb", "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><title>3D-Visualizer</title></head><body>Missing configuration data! Level the bed first!</body></html>");
-            } else {
-                int rrr = -1;
-
-                // check the requested action
-                char *source = get_key_value(query, "source", "config");
-                if (!strcmp(source, "average")) {
-                    // calculate the average and export it in mesh_matrix
-                    calculate_mesh_average(mesh_grid);
-                    apply_precision(mesh_average, precision);
-                    mesh_matrix_export(mesh_average, mesh_grid);
-                } else {
-                    if (strcmp(source, "config")) {
-                        // maybe a data slot number?
-                        int slot = atoi(source);
-                        if ((slot >= 1) && (slot < MAX_DATA_SLOTS)) {
-                            rrr = export_selected_slot(slot);
-                        }
-                    }
-                }
-                if (rrr == 0) {
-                    custom_copy_file(NULL, "/mnt/UDISK/webfs/mesh/index.html", "wb", "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><title>3D-Visualizer</title></head><body>Selected Data Slot is empty! Select another Data Slot!</body></html>");
-                } else {
-                    remove("/mnt/UDISK/webfs/mesh/index.html");
-                    custom_copy_file("/opt/webfs/mesh/index1.html", "/mnt/UDISK/webfs/mesh/index.tmp", "wb", mesh_matrix);
-                    custom_copy_file("/opt/webfs/mesh/index2.html", "/mnt/UDISK/webfs/mesh/index.tmp", "ab", NULL);
-                    rename("/mnt/UDISK/webfs/mesh/index.tmp", "/mnt/UDISK/webfs/mesh/index.html");
-                }
-            }
-        }
-        goto e_x_i_t;
-    }
-
     // ----------------------------- access to the cam.jpg file -----------------------------
-    if ((!strcmp(filename_str, "/mnt/UDISK/webfs/webcam/cam.jpg"))) {
+    if ((!strcmp(req->path, "/webcam/cam.jpg"))) {
         // turn off the cache
         req->cache_turn_off = 'Y';
 
         pthread_mutex_lock(&webcam_mutex);
         last_webcam_request_time = time(NULL);
         if (!webcam_thread_running) {
-            if (debug) fprintf(stderr, "+++ process_custom_pages: starting webcam thread\n");
+            if (debug) LOG( "+++ process_custom_pages: starting webcam thread\n");
             webcam_thread_running = 1;
             if (pthread_create(&webcam_thread_id, NULL, webcam_capture_thread, NULL) != 0) {
-                if (debug) fprintf(stderr, "--- process_custom_pages: failed to create webcam thread\n");
+                if (debug) LOG( "--- process_custom_pages: failed to create webcam thread\n");
                 webcam_thread_running = 0;
             }
         }
@@ -1358,327 +1350,9 @@ void process_custom_pages(char *filename_str, struct REQUEST *req) {
         if (access("/tmp/cam.jpg", F_OK) == -1) {
             custom_copy_file("/mnt/UDISK/webfs/webcam/default.jpg", "/tmp/cam.jpg", "wb", NULL);
         }
-        
+
         // Point the server to the image in tmpfs
         strcpy(filename_str, "/tmp/cam.jpg");
-        goto e_x_i_t;
-    }
-
-    // ----------------------------- access to the api.json file ----------------------------
-    if ((!strcmp(filename_str, "/mnt/UDISK/webfs/api/info.json"))) {
-        // turn off the cache
-        req->cache_turn_off = 'Y';
-
-        update_api();
-        goto e_x_i_t;
-    }
-
-    // ----------------------------- access to the do.json file -----------------------------
-    if ((!strcmp(filename_str, "/mnt/UDISK/webfs/api/do.json"))) {
-        // turn off the cache
-        req->cache_turn_off = 'Y';
-
-        control_api(query);
-        goto e_x_i_t;
-    }
-
-    // ----------------------------- access to the tools index.html -------------------------
-    if ((!strcmp(filename_str, "/mnt/UDISK/webfs/tools/index.html"))) {
-        response_code = 0;
-        error_code = 0;
-
-        // turn off the cache
-        req->cache_turn_off = 'Y';
-
-        // calculate all needed data for the template
-        int rr = read_mesh_from_printer_config();
-        if (rr) {
-            // missing config or missing mesh data:
-            error_code = rr + 1;
-        } else {
-            if ((probe_count_x != probe_count_y) || (x_count != y_count)) {
-                // not square grid setup
-                error_code = 4;
-            } else {
-                if (mesh_grid != probe_count_x) {
-                    // mesh grid different from probe grid
-                    error_code = 5;
-                }
-            }
-        }
-        // calculate the average and export it in mesh_matrix
-        // calculate_mesh_average(mesh_grid);
-        // apply_precision(mesh_average, precision);
-        // mesh_matrix_export(mesh_average, mesh_grid);
-
-        // Fill the index.html template
-        remove("/mnt/UDISK/webfs/tools/index.html");
-        int rrr = populate_template_file("/opt/webfs/tools/index.html", "/mnt/UDISK/webfs/tools/index.tmp", leveling_template_callback);
-        rename("/mnt/UDISK/webfs/tools/index.tmp", "/mnt/UDISK/webfs/tools/index.html");
-        goto e_x_i_t;
-    }
-
-    // process all actions from /leveling/index.html and go back to the index.html
-    if ((!strcmp(filename_str, "/mnt/UDISK/webfs/tools/response.html"))) {
-        // set no error and no information messages
-        response_code = 0;
-        error_code = 0;
-
-        // turn off the cache
-        req->cache_turn_off = 'Y';
-
-        // check the requested action first
-        char *action = get_key_value(query, "action", "unknown");
-        if (!strcmp(action, "unknown")) {
-            // unknown action
-            error_code = 99;
-        }
-
-        if (!strcmp(action, "reboot")) {
-            // reboot
-            system("sync && reboot &");
-            response_code = 1;
-        }
-
-        if (!strcmp(action, "poweroff")) {
-            // power off
-            system("sync && poweroff &");
-            response_code = 12;
-        }
-
-        if (!strcmp(action, "log_clear")) {
-            // log clear
-            system("cat /dev/null > /mnt/UDISK/log");
-            response_code = 8;
-        }
-
-        if (!strcmp(action, "ssh_status")) {
-            // ssh status
-            if (file_exists("/opt/etc/init.d/S51dropbear")) {
-                system_with_output("/opt/etc/init.d/S51dropbear status 2>&1", 1);
-                response_code = 7;
-            } else {
-                error_code = 13;
-            }
-        }
-        if (!strcmp(action, "ssh_start")) {
-            // ssh start
-            if (file_exists("/opt/etc/init.d/S51dropbear")) {
-                system_with_output("/opt/etc/init.d/S51dropbear start 2>&1", 1);
-                response_code = 8;
-            } else {
-                error_code = 13;
-            }
-        }
-        if (!strcmp(action, "ssh_stop")) {
-            // ssh stop
-            if (file_exists("/opt/etc/init.d/S51dropbear")) {
-                system_with_output("/opt/etc/init.d/S51dropbear stop 2>&1", 1);
-                response_code = 8;
-            } else {
-                error_code = 13;
-            }
-        }
-
-        else if (!strcmp(action, "clear_all")) {
-            // clear all slots
-            int i;
-            char fn_buf[64];
-            for (i = 1; i < MAX_DATA_SLOTS; i++) {
-                sprintf(fn_buf, "/user/webfs/data_slot_%d.txt", i);
-                remove(fn_buf);
-            }
-            response_code = 2;
-        } else if (!strcmp(action, "clear_slot")) {
-            char *data_slot = get_key_value(query, "data_slot", "0");
-            int data_slot_int = atoi(data_slot);
-            if ((data_slot_int > 0) && (data_slot_int < MAX_DATA_SLOTS)) {
-                char fn_buf[64];
-                sprintf(fn_buf, "/user/webfs/data_slot_%d.txt", data_slot_int);
-                remove(fn_buf);
-                response_code = 3;
-            } else {
-                error_code = 9;
-            }
-        } else if (!strcmp(action, "save_mesh")) {
-            int rrrr = read_mesh_from_printer_config();
-            if (rrrr) {
-                // missing config or mesh data
-                error_code = rrrr + 1;
-            } else {
-                char *selected_slot = get_key_value(query, "selected_slot", "0");
-                int selected_slot_int = atoi(selected_slot);
-                if ((selected_slot_int > 0) && (selected_slot_int < MAX_DATA_SLOTS)) {
-                    char fn_buf[64];
-                    sprintf(fn_buf, "/user/webfs/data_slot_%d.txt", selected_slot_int);
-                    custom_copy_file(NULL, fn_buf, "wb", mesh_config);
-                    response_code = 4;
-                } else {
-                    error_code = 1;
-                }
-            }
-        } else if (!strcmp(action, "save_profile")) {
-            char *profile = get_key_value(query, "profile", "0");
-            int profile_int = atoi(profile);
-            if ((profile_int >= 1) && (profile_int <= 9)) {
-                char dst_file[64];
-                const char *config_file;
-                const char *config_path;
-                if (!detect_printer_defaults(NULL, &config_path, &config_file, NULL)) {
-                    // save printer*cfg
-                    sprintf(dst_file, "/user/webfs/profiles/%d/%s", profile_int, config_file);
-                    int r1 = custom_copy_file(config_path, dst_file, "wb", NULL);
-                    // save unmodifiable.cfg
-                    sprintf(dst_file, "/user/webfs/profiles/%d/unmodifiable.cfg", profile_int);
-                    int r2 = custom_copy_file("/user/unmodifiable.cfg", dst_file, "wb", NULL);
-                    if ((r1 == 0) && (r2 == 0)) {
-                        saved_profile = profile_int;
-                        response_code = 9;
-                    } else {
-                        error_code = 17;  // error while saving the profile
-                    }
-                } else {
-                    error_code = 15;  // cannot detect printer configuration
-                }
-            } else {
-                error_code = 14;  // invalid profile number
-            }
-        } else if (!strcmp(action, "use_profile")) {
-            char *profile = get_key_value(query, "profile", "0");
-            int profile_int = atoi(profile);
-            if ((profile_int >= 1) && (profile_int <= 9)) {
-                char *profile_str = get_key_value(leveling_config, "used_profile", "1");
-                used_profile = atoi(profile_str);
-                if ((used_profile < 1) || (used_profile > 9))
-                    used_profile = 1;
-                if (profile_int != used_profile) {
-                    char src_file1[64];
-                    char src_file2[64];
-                    const char *config_file;
-                    const char *config_path;
-                    if (!detect_printer_defaults(NULL, &config_path, &config_file, NULL)) {
-                        sprintf(src_file1, "/user/webfs/profiles/%d/%s", profile_int, config_file);
-                        sprintf(src_file2, "/user/webfs/profiles/%d/unmodifiable.cfg", profile_int);
-                        if ((file_exists(src_file1)) && (file_exists(src_file2))) {
-                            // load printer*cfg
-                            int r1 = custom_copy_file(src_file1, config_path, "wb", NULL);
-                            // load unmodifiable.cfg
-                            int r2 = custom_copy_file(src_file2, "/user/unmodifiable.cfg", "wb", NULL);
-                            if ((r1 == 0) && (r2 == 0)) {
-                                leveling_config = set_key_value(leveling_config, "used_profile", profile);
-                                write_config_file("/user/webfs/parameters.cfg", leveling_config);
-                                saved_profile = profile_int;
-                                used_profile = profile_int;
-                                response_code = 10;
-                            } else {
-                                error_code = 19;  // cannot use this profile
-                            }
-                        } else {
-                            error_code = 18;  // cannot read this profile
-                        }
-                    } else {
-                        error_code = 15;  // cannot detect printer configuration
-                    }
-                } else {
-                    error_code = 16;  // the same profile
-                }
-            } else {
-                error_code = 14;  // invalid profile number
-            }
-        } else if (!strcmp(action, "set_average")) {
-            // set the average
-            int rrrr = read_mesh_from_printer_config();
-            if (rrrr) {
-                // missing config or mesh data
-                error_code = rrrr + 1;
-            } else {
-                if ((mesh_grid >= MIN_SUPPORTED_GRID_SIZE) && (mesh_grid <= MAX_SUPPORTED_GRID_SIZE)) {
-                    const char *config_file;
-                    if (!detect_printer_defaults(NULL, &config_file, NULL, NULL)) {
-                        int avg_slots = calculate_mesh_average(mesh_grid);
-                        if (avg_slots > 0) {
-                            apply_precision(mesh_average, precision);
-                            mesh_average_export(mesh_grid, mesh_matrix);
-                            update_printer_config_file(config_file, "points", mesh_matrix);
-                            response_code = 5;
-                        } else {
-                            error_code = 8;
-                        }
-                    } else {
-                        error_code = 15;  // cannot detect printer configuration
-                    }
-                }
-            }
-        } else if (!strcmp(action, "set_parameters")) {
-            read_mesh_from_printer_config();
-            char *precision_str = get_key_value(query, "precision", "0.01");
-            double precision_float = atof(precision_str);
-            char *grid = get_key_value(query, "grid", "0");
-            int grid_int = atoi(grid);
-            char *bed_temp_str = get_key_value(query, "bed_temp", "60");
-            int bed_temp_int = atoi(bed_temp_str);
-            if ((bed_temp_int >= 0) && (bed_temp_int <= 90)) {
-                if ((grid_int >= MIN_SUPPORTED_GRID_SIZE) && (grid_int <= MAX_SUPPORTED_GRID_SIZE)) {
-                    if ((precision_float >= 0.0001) && (precision_float <= 0.1)) {
-                        if (bed_temp_int != bed_temp) {
-                            const char *config_file;
-                            if (!detect_printer_defaults(NULL, &config_file, NULL, NULL)) {
-                                char replacement_value[8];
-                                sprintf(replacement_value, "%d", bed_temp_int);
-                                update_printer_config_file(config_file, "bed_mesh_temp", replacement_value);
-                                bed_temp = bed_temp_int;
-                                response_code = 11;
-                            } else {
-                                response_code = 0;
-                                error_code = 15;  // cannot detect printer configuration
-                            }
-                        }
-                        if (precision_float != precision) {
-                            precision = precision_float;
-                            leveling_config = set_key_value(leveling_config, "precision", precision_str);
-                            write_config_file("/user/webfs/parameters.cfg", leveling_config);
-                            response_code = 6;
-                        }
-                        if (new_grid_size != grid_int) {
-                            // set the "probe_count : grid,grid"
-                            const char *config_file;
-                            if (!detect_printer_defaults(NULL, &config_file, NULL, NULL)) {
-                                char replacement_value[8];
-                                sprintf(replacement_value, "%d,%d", grid_int, grid_int);
-                                update_printer_config_file(config_file, "probe_count", replacement_value);
-                                new_grid_size = grid_int;
-                                error_code = 6;
-                                response_code = 0;
-                            } else {
-                                response_code = 0;
-                                error_code = 15;  // cannot detect printer configuration
-                            }
-                        }
-                        if ((response_code == 0) && (error_code == 0)) {
-                            // no changes
-                            response_code = 0;
-                            error_code = 12;
-                        }
-                    } else {
-                        // unsupported precision
-                        response_code = 0;
-                        error_code = 11;
-                    }
-                } else {
-                    // unsupported grid size
-                    response_code = 0;
-                    error_code = 10;
-                }
-            } else {
-                // unsupported bed temperature
-                response_code = 0;
-                error_code = 20;
-            }
-        }
-
-        remove("/mnt/UDISK/webfs/tools/response.html");
-        int rrr = populate_template_file("/opt/webfs/tools/response.html", "/mnt/UDISK/webfs/tools/response.tmp", leveling_template_callback);
-        rename("/mnt/UDISK/webfs/tools/response.tmp", "/mnt/UDISK/webfs/tools/response.html");
         goto e_x_i_t;
     }
 
@@ -1721,13 +1395,14 @@ restart:
     }
 
     /* check if this looks like a http request after
-             the first few bytes... */
+            the first few bytes... */
     if (req->hdata < 5)
         return;
     if (strncmp(req->hreq, "GET ", 4) != 0 &&
         strncmp(req->hreq, "PUT ", 4) != 0 &&
         strncmp(req->hreq, "HEAD ", 5) != 0 &&
-        strncmp(req->hreq, "POST ", 5) != 0) {
+        strncmp(req->hreq, "POST ", 5) != 0 &&
+        strncmp(req->hreq, "DELETE ", 7) != 0) {
         mkerror(req, 400, 0);
         return;
     }
@@ -1778,7 +1453,7 @@ parse_ranges(struct REQUEST *req) {
         if (*h == ',')
             req->ranges++;
     if (debug)
-        fprintf(stderr, "%03d: %d ranges:", req->fd, req->ranges);
+        LOG( "%03d: %d ranges:", req->fd, req->ranges);
     req->r_start = malloc(req->ranges * sizeof(off_t));
     req->r_end = malloc(req->ranges * sizeof(off_t));
     req->r_head = malloc((req->ranges + 1) * BR_HEADER);
@@ -1794,7 +1469,7 @@ parse_ranges(struct REQUEST *req) {
         if (req->r_hlen)
             free(req->r_hlen);
         if (debug)
-            fprintf(stderr, "oom\n");
+            LOG( "oom\n");
         return 500;
     }
     for (i = 0, off = 0; i < req->ranges; i++) {
@@ -1819,7 +1494,7 @@ parse_ranges(struct REQUEST *req) {
         off++; /* skip "," */
         /* ranges ok? */
         if (debug)
-            fprintf(stderr, " %d-%d",
+            LOG( " %d-%d",
                     (int)(req->r_start[i]),
                     (int)(req->r_end[i]));
         if (req->r_start[i] > req->r_end[i] ||
@@ -1827,13 +1502,13 @@ parse_ranges(struct REQUEST *req) {
             goto parse_error;
     }
     if (debug)
-        fprintf(stderr, " ok\n");
+        LOG( " ok\n");
     return 0;
 
 parse_error:
     req->ranges = 0;
     if (debug)
-        fprintf(stderr, " range error\n");
+        LOG( " range error\n");
     return 400;
 }
 
@@ -2101,7 +1776,7 @@ void parse_request(struct REQUEST *req) {
     struct passwd *pw = NULL;
 
     if (debug)
-        fprintf(stderr, "%s\n", req->hreq);
+        LOG( "%s\n", req->hreq);
 
     /* parse request. Here, scanf is powerful :-) */
     if (4 != sscanf(req->hreq,
@@ -2138,14 +1813,17 @@ void parse_request(struct REQUEST *req) {
     unquote(req->path, req->query, req->uri);
     fixpath(req->path);
     if (debug)
-        fprintf(stderr, "%03d: %s \"%s\" HTTP/%d.%d\n",
+        LOG( "%03d: %s \"%s\" HTTP/%d.%d\n",
                 req->fd, req->type, req->path, req->major, req->minor);
 
     if (debug)
-        fprintf(stderr, "query: \"%s\"\n", req->query);
+        LOG( "query: \"%s\"\n", req->query);
 
     if (0 != strcmp(req->type, "GET") &&
-        0 != strcmp(req->type, "HEAD")) {
+        0 != strcmp(req->type, "HEAD") &&
+        0 != strcmp(req->type, "PUT") &&
+        0 != strcmp(req->type, "POST") &&
+        0 != strcmp(req->type, "DELETE")) {
         mkerror(req, 501, 0);
         return;
     }
@@ -2156,6 +1834,8 @@ void parse_request(struct REQUEST *req) {
 
     /* parse header lines */
     req->keep_alive = req->minor;
+    req->content_length = 0;
+    req->accept_json = 0;
     for (h = req->hreq; h - req->hreq < req->lreq;) {
         h = strchr(h, '\n');
         if (NULL == h)
@@ -2172,7 +1852,7 @@ void parse_request(struct REQUEST *req) {
             if (2 != sscanf(h + 6, "%" S(MAX_HOST) "[a-zA-Z0-9.-]:%d",
                             req->hostname, &port))
                 sscanf(h + 6, "%" S(MAX_HOST) "[a-zA-Z0-9.-]",
-                       req->hostname);
+                      req->hostname);
         } else if (0 == strncasecmp(h, "If-Modified-Since: ", 19)) {
             req->if_modified = h + 19;
         } else if (0 == strncasecmp(h, "If-Unmodified-Since: ", 21)) {
@@ -2182,24 +1862,66 @@ void parse_request(struct REQUEST *req) {
         } else if (0 == strncasecmp(h, "Authorization: Basic ", 21)) {
             decode_base64(req->auth, h + 21, sizeof(req->auth) - 1);
             if (debug)
-                fprintf(stderr, "%03d: auth: %s\n", req->fd, req->auth);
+                LOG( "%03d: auth: %s\n", req->fd, req->auth);
         } else if (0 == strncasecmp(h, "Range: bytes=", 13)) {
             /* parsing must be done after fstat, we need the file size
-                     for the boundary checks */
+                    for the boundary checks */
             req->range_hdr = h + 13;
+        } else if (0 == strncasecmp(h, "Content-Length: ", 16)) {
+            req->content_length = atoi(h + 16);
+        } else if (0 == strncasecmp(h, "Accept: ", 8)) {
+            if (strstr(h + 8, "application/json"))
+                req->accept_json = 1;
         }
     }
     if (debug) {
         if (req->if_modified)
-            fprintf(stderr, "%03d: if-modified-since: \"%s\"\n",
+            LOG( "%03d: if-modified-since: \"%s\"\n",
                     req->fd, req->if_modified);
         if (req->if_unmodified)
-            fprintf(stderr, "%03d: if-unmodified-since: \"%s\"\n",
+            LOG( "%03d: if-unmodified-since: \"%s\"\n",
                     req->fd, req->if_unmodified);
         if (req->if_range)
-            fprintf(stderr, "%03d: if-range: \"%s\"\n",
+            LOG( "%03d: if-range: \"%s\"\n",
                     req->fd, req->if_range);
     }
+
+
+    // Read request body for PUT requests
+    if ((0 == strcmp(req->type, "PUT") || 0 == strcmp(req->type, "POST")) && req->content_length > 0) {
+        if (req->content_length > MAX_HEADER) { // Or some other reasonable limit
+            mkerror(req, 413, 0); // Payload Too Large
+            return;
+        }
+        req->req_body = malloc(req->content_length + 1);
+        if (req->req_body == NULL) {
+            mkerror(req, 500, 0);
+            return;
+        }
+
+        int body_read = 0;
+        // Body starts at req->lreq (set by read_request after finding header end)
+        int body_start_offset = req->lreq;
+        int initial_body_len = req->hdata - body_start_offset;
+        if (initial_body_len > 0) {
+            memcpy(req->req_body, req->hreq + body_start_offset, initial_body_len);
+            body_read = initial_body_len;
+        }
+
+        while (body_read < req->content_length) {
+            rc = read(req->fd, req->req_body + body_read, req->content_length - body_read);
+            if (rc <= 0) {
+                // Error or connection closed
+                free(req->req_body);
+                req->req_body = NULL;
+                mkerror(req, 400, 0);
+                return;
+            }
+            body_read += rc;
+        }
+        req->req_body[req->content_length] = '\0';
+    }
+
 
     /* take care about the hostname */
     if (virtualhosts) {
@@ -2229,7 +1951,7 @@ void parse_request(struct REQUEST *req) {
     /* build filename */
     if (userdir && '~' == req->path[1]) {
         /* expand user directories, i.e.
-                 /~user/path/file => $HOME/public_html/path/file */
+                /~user/path/file => $HOME/public_html/path/file */
         h = strchr(req->path + 2, '/');
         if (NULL == h) {
             mkerror(req, 404, 1);
@@ -2243,19 +1965,29 @@ void parse_request(struct REQUEST *req) {
             return;
         }
         len = snprintf(filename, sizeof(filename) - 1,
-                       "%s/%s/%s", pw->pw_dir, userdir, h + 1);
+                      "%s/%s/%s", pw->pw_dir, userdir, h + 1);
     } else {
         len = snprintf(filename, sizeof(filename) - 1,
-                       "%s%s%s%s",
-                       do_chroot ? "" : doc_root,
-                       virtualhosts ? "/" : "",
-                       virtualhosts ? req->hostname : "",
-                       req->path);
+                      "%s%s%s%s",
+                      do_chroot ? "" : doc_root,
+                      virtualhosts ? "/" : "",
+                      virtualhosts ? req->hostname : "",
+                      req->path);
     }
 
     req->cache_turn_off = 'N';
 
     // process the custom pages
+    if (strncmp(req->path, "/api/", 5) == 0) {
+        // Check if it's a profiles, security, system, or webserver API route
+        if (strncmp(req->path, "/api/profiles", 13) == 0 ||
+            strncmp(req->path, "/api/security", 13) == 0 ||
+            strncmp(req->path, "/api/system", 11) == 0 ||
+            strcmp(req->path, "/api/webserver") == 0) {
+            handle_api_request(req, filename);
+            return; // API request handled, don't continue with file serving
+        }
+    }
     process_custom_pages(filename, req);
 
     h = filename + len - 1;
@@ -2280,6 +2012,29 @@ void parse_request(struct REQUEST *req) {
         }
 
         if (no_listing) {
+            /* For SvelteKit SPA, serve index.html instead of 403 for non-existent directories */
+            int is_api_route = (strncmp(req->path, "/api/", 5) == 0);
+            int is_static_asset = (strncmp(req->path, "/_app/", 6) == 0) ||
+                                  (strncmp(req->path, "/webcam/", 8) == 0) ||
+                                  (strncmp(req->path, "/files/", 7) == 0) ||
+                                  (strncmp(req->path, "/deprecated/", 12) == 0);
+
+            if (!is_api_route && !is_static_asset) {
+                /* Try to serve root index.html for SPA routing */
+                char index_path[1024];
+                int index_len = snprintf(index_path, sizeof(index_path) - 1,
+                          "%s%s%s%s",
+                          do_chroot ? "" : doc_root,
+                          virtualhosts ? "/" : "",
+                          virtualhosts ? req->hostname : "",
+                          "/index.html");
+                if (index_len > 0 && index_len < (int)sizeof(index_path)) {
+                    if (-1 != (req->bfd = open(index_path, O_RDONLY))) {
+                        close_on_exec(req->bfd);
+                        goto regular_file;
+                    }
+                }
+            }
             mkerror(req, 403, 1);
             return;
         };
@@ -2288,20 +2043,66 @@ void parse_request(struct REQUEST *req) {
             if (errno == EACCES) {
                 mkerror(req, 403, 1);
             } else {
+                /* Directory doesn't exist - check if this is a SvelteKit SPA route */
+                int is_api_route = (strncmp(req->path, "/api/", 5) == 0);
+                int is_static_asset = (strncmp(req->path, "/_app/", 6) == 0) ||
+                                      (strncmp(req->path, "/webcam/", 8) == 0) ||
+                                      (strncmp(req->path, "/files/", 7) == 0) ||
+                                      (strncmp(req->path, "/deprecated/", 12) == 0);
+
+                if (!is_api_route && !is_static_asset) {
+                    /* Try to serve root index.html for SPA routing */
+                    char index_path[1024];
+                    int index_len = snprintf(index_path, sizeof(index_path) - 1,
+                              "%s%s%s%s",
+                              do_chroot ? "" : doc_root,
+                              virtualhosts ? "/" : "",
+                              virtualhosts ? req->hostname : "",
+                              "/index.html");
+                    if (index_len > 0 && index_len < (int)sizeof(index_path)) {
+                        if (-1 != (req->bfd = open(index_path, O_RDONLY))) {
+                            close_on_exec(req->bfd);
+                            strcpy(filename, index_path);
+                            goto regular_file;
+                        }
+                    }
+                }
                 mkerror(req, 404, 1);
             }
             return;
         }
-        strftime(req->mtime, sizeof(req->mtime), RFC1123, gmtime(&req->bst.st_mtime));
-        req->mime = "text/html";
-        req->dir = get_dir(req, filename);
-        if (NULL == req->body) {
+        // Set modification time and current time for directory listings
+        struct tm tm_mtime, tm_ctime;
+        time_t curtime;
+        time(&curtime);
+
+        gmtime_r(&req->bst.st_mtime, &tm_mtime);
+        gmtime_r(&curtime, &tm_ctime);
+
+        strftime(req->mtime, sizeof(req->mtime), RFC1123, &tm_mtime);
+        strftime(req->ctime, sizeof(req->ctime), RFC1123, &tm_ctime);
+
+        if (req->accept_json) {
+            /* JSON directory listing */
+            req->mime = "application/json";
+            req->dir = NULL;
+            int json_len = 0;
+            req->body = get_dir_json(filename, req->path, &json_len);
+            if (req->body) {
+                req->lbody = json_len;
+                req->body_is_malloced = 1;  /* Mark as dynamically allocated */
+            }
+        } else {
+            req->mime = "text/html";
+            req->dir = get_dir(req, filename);
+        }
+        if (NULL == req->body && NULL == req->dir) {
             /* We arrive here if opendir failed, probably due to -EPERM
-             * It does exist (see the stat() call above) */
+            * It does exist (see the stat() call above) */
             mkerror(req, 403, 1);
             return;
         } else if (NULL != req->if_modified &&
-                   0 == strcmp(req->if_modified, req->mtime)) {
+                  0 == strcmp(req->if_modified, req->mtime)) {
             /* 304 not modified */
             mkheader(req, 304);
             req->head_only = 1;
@@ -2316,6 +2117,35 @@ void parse_request(struct REQUEST *req) {
     if (-1 == (req->bfd = open(filename, O_RDONLY))) {
         if (errno == EACCES) {
             mkerror(req, 403, 1);
+        } else if (errno == ENOENT) {
+            /* File not found - check if this is a SvelteKit SPA route */
+            /* Don't serve index.html for API routes, static assets, or files with extensions */
+            int is_api_route = (strncmp(req->path, "/api/", 5) == 0);
+            int is_static_asset = (strncmp(req->path, "/_app/", 6) == 0) ||
+                                  (strncmp(req->path, "/webcam/", 8) == 0) ||
+                                  (strncmp(req->path, "/files/", 7) == 0) ||
+                                  (strncmp(req->path, "/deprecated/", 12) == 0) ||
+                                  (strchr(req->path, '.') != NULL); /* Has file extension */
+
+            if (!is_api_route && !is_static_asset) {
+                /* This is likely a SvelteKit route - serve index.html for SPA routing */
+                char index_path[1024];
+                int index_len = snprintf(index_path, sizeof(index_path) - 1,
+                          "%s%s%s%s",
+                          do_chroot ? "" : doc_root,
+                          virtualhosts ? "/" : "",
+                          virtualhosts ? req->hostname : "",
+                          "/index.html");
+                if (index_len > 0 && index_len < (int)sizeof(index_path)) {
+                    if (-1 != (req->bfd = open(index_path, O_RDONLY))) {
+                        /* Successfully opened index.html - continue to serve it */
+                        strcpy(filename, index_path);
+                        goto regular_file;
+                    }
+                }
+            }
+            /* Fall through to 404 if we couldn't serve index.html */
+            mkerror(req, 404, 1);
         } else {
             mkerror(req, 404, 1);
         }
@@ -2350,15 +2180,20 @@ regular_file:
 
     req->mime = get_mime(filename);
 
-    //  current time
+    // Set modification time and current time for regular files
+    struct tm tm_mtime, tm_ctime;
     time_t curtime;
     time(&curtime);
+
     if (req->cache_turn_off == 'Y') {
-        strftime(req->mtime, sizeof(req->mtime), RFC1123, localtime(&curtime));
+        gmtime_r(&curtime, &tm_mtime);
     } else {
-        strftime(req->mtime, sizeof(req->mtime), RFC1123, gmtime(&req->bst.st_mtime));
+        gmtime_r(&req->bst.st_mtime, &tm_mtime);
     }
-    strftime(req->ctime, sizeof(req->mtime), RFC1123, localtime(&curtime));
+    gmtime_r(&curtime, &tm_ctime);
+
+    strftime(req->mtime, sizeof(req->mtime), RFC1123, &tm_mtime);
+    strftime(req->ctime, sizeof(req->ctime), RFC1123, &tm_ctime);
     if (NULL != req->if_range && 0 != strcmp(req->if_range, req->mtime))
         /* mtime mismatch -> no ranges */
         req->ranges = 0;

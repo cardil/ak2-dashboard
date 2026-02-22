@@ -51,7 +51,7 @@ xgetpwuid(uid_t uid) {
         cache[next] = strdup(pw->pw_name);
     uids[next] = uid;
     if (debug)
-        fprintf(stderr, "uid: %3d  n=%2d, name=%s\n",
+        LOG( "uid: %3d  n=%2d, name=%s\n",
                 (int)uid, next, cache[next] ? cache[next] : "?");
 
     next++;
@@ -90,7 +90,7 @@ xgetgrgid(gid_t gid) {
         cache[next] = strdup(gr->gr_name);
     gids[next] = gid;
     if (debug)
-        fprintf(stderr, "gid: %3d  n=%2d, name=%s\n",
+        LOG( "gid: %3d  n=%2d, name=%s\n",
                 (int)gid, next, cache[next] ? cache[next] : "?");
 
     next++;
@@ -110,6 +110,11 @@ struct myfile {
     char n[1];
 };
 
+struct filelist {
+    struct myfile **files;
+    int count;
+};
+
 static int
 compare_files(const void *a, const void *b) {
     const struct myfile *aa = *(struct myfile **)a;
@@ -118,6 +123,97 @@ compare_files(const void *a, const void *b) {
     if (S_ISDIR(aa->s.st_mode) != S_ISDIR(bb->s.st_mode))
         return S_ISDIR(aa->s.st_mode) ? -1 : 1;
     return strcmp(aa->n, bb->n);
+}
+
+static void
+free_filelist(struct filelist *fl) {
+    int i;
+    if (fl->files) {
+        for (i = 0; i < fl->count; i++)
+            if (fl->files[i])
+                free(fl->files[i]);
+        free(fl->files);
+    }
+    fl->files = NULL;
+    fl->count = 0;
+}
+
+/* Read directory and return sorted file list. Returns 0 on success, -1 on error. */
+static int
+read_dir(char *filename, char *path, struct filelist *fl) {
+    DIR *dir;
+    struct dirent *file;
+    struct myfile **re1;
+    int uid, gid;
+    char line[1024];
+
+    fl->files = NULL;
+    fl->count = 0;
+
+    if (debug)
+        LOG( "dir: reading %s\n", filename);
+    if (NULL == (dir = opendir(filename)))
+        return -1;
+
+    /* read dir */
+    uid = getuid();
+    gid = getgid();
+    for (;;) {
+        if (NULL == (file = readdir(dir)))
+            break;
+        if (0 == strcmp(file->d_name, ".")) {
+            /* skip the the "." directory */
+            continue;
+        }
+        if (0 == strcmp(path, "/") && 0 == strcmp(file->d_name, "..")) {
+            /* skip the ".." directory in root dir */
+            continue;
+        }
+
+        if (0 == (fl->count % 64)) {
+            re1 = realloc(fl->files, (fl->count + 64) * sizeof(struct myfile *));
+            if (NULL == re1)
+                goto oom;
+            fl->files = re1;
+        }
+
+        fl->files[fl->count] = malloc(strlen(file->d_name) + sizeof(struct myfile));
+        if (NULL == fl->files[fl->count])
+            goto oom;
+        strcpy(fl->files[fl->count]->n, file->d_name);
+        sprintf(line, "%s/%s", filename, file->d_name);
+        if (-1 == stat(line, &fl->files[fl->count]->s)) {
+            free(fl->files[fl->count]);
+            continue;
+        }
+
+        fl->files[fl->count]->r = 0;
+        if (S_ISDIR(fl->files[fl->count]->s.st_mode) ||
+            S_ISREG(fl->files[fl->count]->s.st_mode)) {
+            if (fl->files[fl->count]->s.st_uid == uid &&
+                fl->files[fl->count]->s.st_mode & 0400)
+                fl->files[fl->count]->r = 1;
+            else if (fl->files[fl->count]->s.st_uid == gid &&
+                    fl->files[fl->count]->s.st_mode & 0040)
+                fl->files[fl->count]->r = 1;
+            else if (fl->files[fl->count]->s.st_mode & 0004)
+                fl->files[fl->count]->r = 1;
+        }
+        fl->count++;
+    }
+    closedir(dir);
+
+    /* sort */
+    if (fl->count)
+        qsort(fl->files, fl->count, sizeof(struct myfile *), compare_files);
+
+    return 0;
+
+oom:
+    LOG( "oom\n");
+    closedir(dir);
+    free_filelist(fl);
+    return -1;
 }
 
 static char do_quote[256];
@@ -195,77 +291,79 @@ static void strmode(mode_t mode, char *dest) {
 }
 #endif
 
+char *
+get_dir_json(char *filename, char *path, int *length) {
+    struct filelist fl;
+    char *buf = NULL, *re2;
+    int len, size, i;
+    int first = 1;
+
+    if (read_dir(filename, path, &fl) < 0)
+        return NULL;
+
+    /* output JSON */
+    size = LS_ALLOC_SIZE;
+    buf = malloc(size);
+    if (NULL == buf)
+        goto oom;
+    len = 0;
+
+    len += sprintf(buf + len, "[");
+
+    for (i = 0; i < fl.count; i++) {
+        if (len > size)
+            abort();
+        if (len + (LS_ALLOC_SIZE >> 2) > size) {
+            size += LS_ALLOC_SIZE;
+            re2 = realloc(buf, size);
+            if (NULL == re2)
+                goto oom;
+            buf = re2;
+        }
+
+        if (!first)
+            len += sprintf(buf + len, ",");
+        first = 0;
+
+        if (S_ISDIR(fl.files[i]->s.st_mode)) {
+            len += sprintf(buf + len,
+                          "{\"name\":\"%s\",\"isDirectory\":true}",
+                          fl.files[i]->n);
+        } else {
+            len += sprintf(buf + len,
+                          "{\"name\":\"%s\",\"isDirectory\":false,\"size\":%" PRId64 ",\"mtime\":%" PRId64 "}",
+                          fl.files[i]->n,
+                          (int64_t)fl.files[i]->s.st_size,
+                          (int64_t)fl.files[i]->s.st_mtime);
+        }
+    }
+
+    len += sprintf(buf + len, "]");
+
+    free_filelist(&fl);
+    *length = len;
+    return buf;
+
+oom:
+    LOG( "oom\n");
+    free_filelist(&fl);
+    if (buf)
+        free(buf);
+    return NULL;
+}
+
 static char *
 ls(time_t now, char *hostname, char *filename, char *path, int *length) {
-    DIR *dir;
-    struct dirent *file;
-    struct myfile **files = NULL;
-    struct myfile **re1;
+    struct filelist fl;
     char *h1, *h2, *re2, *buf = NULL;
-    int count, len, size, i, uid, gid;
+    int len, size, i;
     char line[1024];
     char *pw = NULL, *gr = NULL;
 
-    if (debug)
-        fprintf(stderr, "dir: reading %s\n", filename);
-    if (NULL == (dir = opendir(filename)))
+    if (read_dir(filename, path, &fl) < 0)
         return NULL;
 
-    /* read dir */
-    uid = getuid();
-    gid = getgid();
-    for (count = 0;; count++) {
-        if (NULL == (file = readdir(dir)))
-            break;
-        if (0 == strcmp(file->d_name, ".")) {
-            /* skip the the "." directory */
-            count--;
-            continue;
-        }
-        if (0 == strcmp(path, "/") && 0 == strcmp(file->d_name, "..")) {
-            /* skip the ".." directory in root dir */
-            count--;
-            continue;
-        }
-
-        if (0 == (count % 64)) {
-            re1 = realloc(files, (count + 64) * sizeof(struct myfile *));
-            if (NULL == re1)
-                goto oom;
-            files = re1;
-        }
-
-        files[count] = malloc(strlen(file->d_name) + sizeof(struct myfile));
-        if (NULL == files[count])
-            goto oom;
-        strcpy(files[count]->n, file->d_name);
-        sprintf(line, "%s/%s", filename, file->d_name);
-        if (-1 == stat(line, &files[count]->s)) {
-            free(files[count]);
-            count--;
-            continue;
-        }
-
-        files[count]->r = 0;
-        if (S_ISDIR(files[count]->s.st_mode) ||
-            S_ISREG(files[count]->s.st_mode)) {
-            if (files[count]->s.st_uid == uid &&
-                files[count]->s.st_mode & 0400)
-                files[count]->r = 1;
-            else if (files[count]->s.st_uid == gid &&
-                     files[count]->s.st_mode & 0040)
-                files[count]->r = 1; /* FIXME: check additional groups */
-            else if (files[count]->s.st_mode & 0004)
-                files[count]->r = 1;
-        }
-    }
-    closedir(dir);
-
-    /* sort */
-    if (count)
-        qsort(files, count, sizeof(struct myfile *), compare_files);
-
-    /* output */
+    /* output HTML */
     size = LS_ALLOC_SIZE;
     buf = malloc(size);
     if (NULL == buf)
@@ -273,11 +371,11 @@ ls(time_t now, char *hostname, char *filename, char *path, int *length) {
     len = 0;
 
     len += sprintf(buf + len,
-                   "<html>\n"
-                   "<head>\n<title>%s:%d%s</title>\n<meta charset=\"utf-8\" />\n<meta http-equiv=\"Content-type\" content=\"text/html; charset=utf-8\" />\n</head>\n"
-                   "<body bgcolor=white text=black link=darkblue vlink=firebrick alink=red>\n"
-                   "<h1>listing: \n",
-                   hostname, tcp_port, path);
+            "<html>\n"
+            "<head>\n<title>%s:%d%s</title>\n<meta charset=\"utf-8\" />\n<meta http-equiv=\"Content-type\" content=\"text/html; charset=utf-8\" />\n</head>\n"
+            "<body bgcolor=white text=black link=darkblue vlink=firebrick alink=red>\n"
+            "<h1>listing: \n",
+            hostname, tcp_port, path);
 
     h1 = path, h2 = path + 1;
     for (;;) {
@@ -291,10 +389,10 @@ ls(time_t now, char *hostname, char *filename, char *path, int *length) {
             buf = re2;
         }
         len += sprintf(buf + len, "<a href=\"%s\">%*.*s</a>",
-                       quote(path, h2 - path),
-                       (int)(h2 - h1),
-                       (int)(h2 - h1),
-                       h1);
+                      quote(path, h2 - path),
+                      (int)(h2 - h1),
+                      (int)(h2 - h1),
+                      h1);
         h1 = h2;
         h2 = strchr(h2, '/');
         if (NULL == h2)
@@ -303,11 +401,11 @@ ls(time_t now, char *hostname, char *filename, char *path, int *length) {
     }
 
     len += sprintf(buf + len,
-                   "</h1><hr noshade size=1><pre>\n"
-                   "<b>access      user      group     date             "
-                   "size  name</b>\n\n");
+                  "</h1><hr noshade size=1><pre>\n"
+                  "<b>access      user      group     date             "
+                  "size  name</b>\n\n");
 
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < fl.count; i++) {
         if (len > size)
             abort();
         if (len + (LS_ALLOC_SIZE >> 2) > size) {
@@ -319,88 +417,80 @@ ls(time_t now, char *hostname, char *filename, char *path, int *length) {
         }
 
         /* mode */
-        strmode(files[i]->s.st_mode, buf + len);
+        strmode(fl.files[i]->s.st_mode, buf + len);
         len += 10;
         buf[len++] = ' ';
         buf[len++] = ' ';
 
         /* user */
-        pw = xgetpwuid(files[i]->s.st_uid);
+        pw = xgetpwuid(fl.files[i]->s.st_uid);
         if (NULL != pw)
             len += sprintf(buf + len, "%-8.8s  ", pw);
         else
-            len += sprintf(buf + len, "%8d  ", (int)files[i]->s.st_uid);
+            len += sprintf(buf + len, "%8d  ", (int)fl.files[i]->s.st_uid);
 
         /* group */
-        gr = xgetgrgid(files[i]->s.st_gid);
+        gr = xgetgrgid(fl.files[i]->s.st_gid);
         if (NULL != gr)
             len += sprintf(buf + len, "%-8.8s  ", gr);
         else
-            len += sprintf(buf + len, "%8d  ", (int)files[i]->s.st_gid);
+            len += sprintf(buf + len, "%8d  ", (int)fl.files[i]->s.st_gid);
 
         /* mtime */
-        if (now - files[i]->s.st_mtime > 60 * 60 * 24 * 30 * 6)
+        if (now - fl.files[i]->s.st_mtime > 60 * 60 * 24 * 30 * 6)
             len += strftime(buf + len, 255, "%b %d  %Y  ",
-                            gmtime(&files[i]->s.st_mtime));
+                            gmtime(&fl.files[i]->s.st_mtime));
         else
             len += strftime(buf + len, 255, "%b %d %H:%M  ",
-                            gmtime(&files[i]->s.st_mtime));
+                            gmtime(&fl.files[i]->s.st_mtime));
 
         /* size */
-        if (S_ISDIR(files[i]->s.st_mode)) {
+        if (S_ISDIR(fl.files[i]->s.st_mode)) {
             len += sprintf(buf + len, "  &lt;DIR&gt;  ");
-        } else if (!S_ISREG(files[i]->s.st_mode)) {
+        } else if (!S_ISREG(fl.files[i]->s.st_mode)) {
             len += sprintf(buf + len, "     --  ");
-        } else if (files[i]->s.st_size < 1024 * 9) {
+        } else if (fl.files[i]->s.st_size < 1024 * 9) {
             len += sprintf(buf + len, "%4d  B  ",
-                           (int)files[i]->s.st_size);
-        } else if (files[i]->s.st_size < 1024 * 1024 * 9) {
+                          (int)fl.files[i]->s.st_size);
+        } else if (fl.files[i]->s.st_size < 1024 * 1024 * 9) {
             len += sprintf(buf + len, "%4d kB  ",
-                           (int)(files[i]->s.st_size >> 10));
-        } else if ((int64_t)(files[i]->s.st_size) < (int64_t)1024 * 1024 * 1024 * 9) {
+                          (int)(fl.files[i]->s.st_size >> 10));
+        } else if ((int64_t)(fl.files[i]->s.st_size) < (int64_t)1024 * 1024 * 1024 * 9) {
             len += sprintf(buf + len, "%4d MB  ",
-                           (int)(files[i]->s.st_size >> 20));
-        } else if ((int64_t)(files[i]->s.st_size) < (int64_t)1024 * 1024 * 1024 * 1024 * 9) {
+                          (int)(fl.files[i]->s.st_size >> 20));
+        } else if ((int64_t)(fl.files[i]->s.st_size) < (int64_t)1024 * 1024 * 1024 * 1024 * 9) {
             len += sprintf(buf + len, "%4d GB  ",
-                           (int)(files[i]->s.st_size >> 30));
+                          (int)(fl.files[i]->s.st_size >> 30));
         } else {
             len += sprintf(buf + len, "%4d TB  ",
-                           (int)(files[i]->s.st_size >> 40));
+                          (int)(fl.files[i]->s.st_size >> 40));
         }
 
         /* filename */
-        if (files[i]->r) {
+        if (fl.files[i]->r) {
             len += sprintf(buf + len, "<a href=\"%s%s\">%s</a>\n",
-                           quote(files[i]->n, 9999),
-                           S_ISDIR(files[i]->s.st_mode) ? "/" : "",
-                           files[i]->n);
+                          quote(fl.files[i]->n, 9999),
+                          S_ISDIR(fl.files[i]->s.st_mode) ? "/" : "",
+                          fl.files[i]->n);
         } else {
-            len += sprintf(buf + len, "%s\n", files[i]->n);
+            len += sprintf(buf + len, "%s\n", fl.files[i]->n);
         }
     }
     strftime(line, 32, "%d/%b/%Y %H:%M:%S GMT", gmtime(&now));
     len += sprintf(buf + len,
-                   "</pre><hr noshade size=1>\n"
-                   "<small><a href=\"%s\">%s</a> &nbsp; %s</small>\n"
-                   "</body>\n</html>\n",
-                   HOMEPAGE, server_name, line);
-    for (i = 0; i < count; i++)
-        free(files[i]);
-    if (count)
-        free(files);
+                  "</pre><hr noshade size=1>\n"
+                  "<small><a href=\"%s\">%s</a> &nbsp; %s</small>\n"
+                  "</body>\n</html>\n",
+                  HOMEPAGE, server_name, line);
+    free_filelist(&fl);
 
     /* return results */
     *length = len;
     return buf;
 
 oom:
-    fprintf(stderr, "oom\n");
-    if (files) {
-        for (i = 0; i < count; i++)
-            if (files[i])
-                free(files[i]);
-        free(files);
-    }
+    LOG( "oom\n");
+    free_filelist(&fl);
     if (buf)
         free(buf);
     return NULL;
@@ -421,7 +511,7 @@ void free_dir(struct DIRCACHE *dir) {
     }
     DO_UNLOCK(dir->lock_refcount);
     if (debug)
-        fprintf(stderr, "dir: delete %s\n", dir->path);
+        LOG( "dir: delete %s\n", dir->path);
     FREE_LOCK(dir->lock_refcount);
     FREE_LOCK(dir->lock_reading);
     FREE_COND(dir->wait_reading);
@@ -437,7 +527,7 @@ get_dir(struct REQUEST *req, char *filename) {
 
     DO_LOCK(lock_dircache);
     for (prev = NULL, this = dirs, i = 0; this != NULL;
-         prev = this, this = this->next, i++) {
+        prev = this, this = this->next, i++) {
         if (0 == strcmp(filename, this->path)) {
             /* remove from list */
             if (NULL == prev)
@@ -445,7 +535,7 @@ get_dir(struct REQUEST *req, char *filename) {
             else
                 prev->next = this->next;
             if (debug)
-                fprintf(stderr, "dir: found %s\n", this->path);
+                LOG( "dir: found %s\n", this->path);
             break;
         }
         if (i > max_dircache) {

@@ -1,0 +1,67 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "build:mocks": "node test/mocks/buildMockCommands.mjs",
+    "preview": "vite preview",
+    "prepare": "npm run build:mocks && svelte-kit sync || echo ''",
+    "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "lint": "prettier --check .",
+    "lint:fix": "prettier --write .",
+    "format": "npm run lint:fix",
+    "test": "npm run test:components && npm run test:smoke",
+    "test:components": "vitest run",
+    "test:smoke": "vitest run -c test/smoke/vitest.config.ts",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@lavamoat/allow-scripts": "^3.3.1",
+    "@lavamoat/preinstall-always-fail": "^2.1.0",
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.47.1",
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "@testing-library/jest-dom": "^6.4.8",
+    "@testing-library/svelte": "^5.2.9",
+    "@types/node": "^24.10.0",
+    "@types/prismjs": "^1.26.5",
+    "@types/socket.io-client": "^1.4.36",
+    "jsdom": "^27.2.0",
+    "marked": "^17.0.1",
+    "node-fetch": "^3.3.2",
+    "patch-package": "^8.0.1",
+    "prettier": "^3.4.2",
+    "prettier-plugin-svelte": "^3.2.6",
+    "socket.io": "^4.8.1",
+    "svelte": "^5.41.0",
+    "svelte-check": "^4.3.3",
+    "svelte-fa": "^4.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.10",
+    "vitest": "^4.0.9"
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-svg-core": "^7.1.0",
+    "@fortawesome/free-regular-svg-icons": "^7.1.0",
+    "@fortawesome/free-solid-svg-icons": "^7.1.0",
+    "@fortawesome/svelte-fontawesome": "^0.2.4",
+    "@svelte-plugins/tooltips": "^3.0.3",
+    "echarts-gl": "^2.0.9",
+    "prismjs": "^1.30.0",
+    "socket.io-client": "^4.8.1",
+    "svelte-sonner": "^1.0.6"
+  },
+  "lavamoat": {
+    "allowScripts": {
+      "$root$": true,
+      "@lavamoat/preinstall-always-fail": false,
+      "@sveltejs/kit": true,
+      "vite>esbuild": false,
+      "vite>rollup": false
+    }
+  }
+}

@@ -1,4 +1,8 @@
+#ifndef HTTPD_H
+#define HTTPD_H
+
 #include <sys/stat.h>
+#include <fcntl.h>
 
 // #define MORE_INFO
 // #define NO_SENDFILE
@@ -71,6 +75,9 @@ struct REQUEST {
     char *r_head;
     int *r_hlen;
     char *cors;
+    char *req_body;
+    int content_length;
+    int accept_json;     /* client wants JSON response */
 
     /* response */
     int status;                /* status code (log) */
@@ -79,6 +86,7 @@ struct REQUEST {
     int lres;                  /* header length */
     char *mime;                /* mime type */
     char *body;
+    int body_is_malloced;      /* 1 if body was malloc'd and needs free() */
     off_t lbody;
     int bfd;         /* file descriptor */
     struct stat bst; /* file info */
@@ -92,6 +100,9 @@ struct REQUEST {
 
     /* linked list */
     struct REQUEST *next;
+
+    /* per-request API response buffer (must be last to avoid layout changes) */
+    char response_buffer[8192];
 };
 
 /* --- string lists --------------------------------------------- */
@@ -149,6 +160,7 @@ void xerror(int loglevel, char *txt, char *peerhost);
 int file_exists(const char *filename);
 
 static void inline close_on_exec(int fd) {
+    fcntl(fd, F_SETFD, FD_CLOEXEC);
 }
 
 /* --- request.c ------------------------------------------------ */
@@ -175,6 +187,7 @@ void write_request(struct REQUEST *req);
 void init_quote(void);
 char *quote(unsigned char *path, int maxlength);
 struct DIRCACHE *get_dir(struct REQUEST *req, char *filename);
+char *get_dir_json(char *filename, char *path, int *length);
 void free_dir(struct DIRCACHE *dir);
 
 /* --- mime.c --------------------------------------------------- */
@@ -210,6 +223,29 @@ char *get_key_value(config_option_t conf_opt, char *key, char *def_value);
 config_option_t read_config_file_from_get_request(char *parameters);
 
 /* -------------------------------------------------------------- */
+/* Logging */
+
+extern FILE *logfh;
+extern int flushlog;
+
+/* Log to file if available, otherwise to stderr */
+/* Always flush for regular/debug logs (not access logs) */
+#define LOG(fmt, ...) do { \
+    if (logfh) { \
+        fprintf(logfh, fmt, ##__VA_ARGS__); \
+        fflush(logfh); \
+    } else { \
+        fprintf(stderr, fmt, ##__VA_ARGS__); \
+    } \
+} while(0)
+
+/* System command execution */
+#define SYSTEM_BUFFER_MAX 1024
+extern char system_buffer[SYSTEM_BUFFER_MAX];
+extern int system_with_output(const char *cmd, int line_number);
+extern void get_memory_info(unsigned long long *total_mem, unsigned long long *free_mem);
+
+/* -------------------------------------------------------------- */
 
 #define INIT_LOCK(mutex)       /* nothing */
 #define FREE_LOCK(mutex)       /* nothing */
@@ -219,3 +255,5 @@ config_option_t read_config_file_from_get_request(char *parameters);
 #define FREE_COND(cond)        /* nothing */
 #define BCAST_COND(cond)       /* nothing */
 #define WAIT_COND(cond, mutex) /* nothing */
+
+#endif /* HTTPD_H */
