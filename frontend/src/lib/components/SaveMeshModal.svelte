@@ -67,7 +67,7 @@
         <button
           class="primary"
           on:click={handleSave}
-          disabled={slotNumber === null}>Save</button
+          disabled={slotNumber == null}>Save</button
         >
       </div>
     </div>
