@@ -127,7 +127,7 @@ This project represents countless hours of development, testing, and refinement 
 
 The AK2 Dashboard consists of two main components:
 
-- **C Backend** - A lightweight WEBFS-based server built with MUSL for minimal resource usage
+- **C Backend** - A lightweight WEBFS-based server built with glibc for minimal resource usage
 - **Svelte Frontend** - A modern, reactive web application that communicates via REST API
 
 The entire stack runs efficiently on the printer's ARM processor, using less than 1% of system memory and imposing minimal CPU load.
