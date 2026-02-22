@@ -21,11 +21,11 @@
   <div class="file-details">
     <div class="filename" title={file.name}>{file.name}</div>
     <div class="file-meta">
-      <div class="meta-item" title="File size: {formattedSize}">
+      <div class="meta-item" title={`File size: ${formattedSize}`}>
         <FontAwesomeIcon icon={faDatabase} />
         <span>{formattedSize}</span>
       </div>
-      <div class="meta-item" title="Printed: {timeAgo}">
+      <div class="meta-item" title={`Printed: ${timeAgo}`}>
         <FontAwesomeIcon icon={faClock} />
         <span>{timeAgo}</span>
       </div>
