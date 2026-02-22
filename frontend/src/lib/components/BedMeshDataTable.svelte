@@ -49,6 +49,7 @@
     const isDarkMode =
       $theme === "dark" ||
       ($theme === "auto" &&
+        typeof window !== "undefined" &&
         window.matchMedia("(prefers-color-scheme: dark)").matches)
     const textColor = isDarkMode
       ? textColorsDark[colorIndex]
