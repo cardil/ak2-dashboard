@@ -42,6 +42,7 @@ lint-only: $(LINT_STAMP) ## Lint the sources
 $(LINT_STAMP): $(SOURCE_FILES)
 	@echo "$(BLUE)➜ Linting frontend...$(NC)"
 	npm run lint
+	@mkdir -p $(STAMP_DIR)
 	@touch $(LINT_STAMP)
 
 lint: init lint-only ## Lint the sources (runs also: init)
@@ -51,6 +52,7 @@ compile-only: $(COMPILE_STAMP) ## Compile the sources
 $(COMPILE_STAMP): $(SOURCE_FILES)
 	@echo "$(BLUE)➜ Checking frontend...$(NC)"
 	npm run check
+	@mkdir -p $(STAMP_DIR)
 	@touch $(COMPILE_STAMP)
 
 compile: lint compile-only ## Compile the sources (runs also: init, lint)
@@ -60,6 +62,7 @@ test-only: $(TEST_STAMP) ## Run tests
 $(TEST_STAMP): $(SOURCE_FILES) $(TEST_FILES)
 	@echo "$(BLUE)➜ Testing frontend...$(NC)"
 	npm run test
+	@mkdir -p $(STAMP_DIR)
 	@touch $(TEST_STAMP)
 
 test: compile test-only ## Run tests (runs also: init, lint, compile)

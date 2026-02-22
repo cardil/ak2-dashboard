@@ -14,7 +14,7 @@ WARN := $(YELLOW)⚠$(NC)
 ARROW := $(BLUE)➜$(NC)
 
 # Docker/Podman configuration for glibc cross-compilation
-DOCKER := $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null)
+DOCKER := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
 DOCKER_IMAGE := localhost/arm-cross-cc
 DOCKER_PLATFORM := linux/arm/v7
 
@@ -81,6 +81,7 @@ docker-image: ## Build container image for cross-compilation
 	@$(CURDIR)/../scripts/pull-base-images.sh $(DOCKER_PLATFORM) build.Dockerfile
 	@$(DOCKER) build \
 		--pull=never \
+		$(shell $(DOCKER) image exists $(DOCKER_IMAGE) 2>/dev/null && echo --cache-from $(DOCKER_IMAGE)) \
 		--platform $(DOCKER_PLATFORM) \
 		-t $(DOCKER_IMAGE) \
 		-f build.Dockerfile .

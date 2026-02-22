@@ -31,7 +31,7 @@ E2E_SOURCES := $(shell find $(ROOT_DIR)/src -type f \( -name '*.c' -o -name '*.h
 	Dockerfile Makefile
 
 # E2E testbed configuration
-E2E_IMAGE := localhost/e2e_printer-testbed:latest
+E2E_IMAGE := localhost/e2e_printer-testbed
 E2E_CONTAINER := ak2-testbed
 E2E_PLATFORM := linux/arm/v7
 
@@ -58,6 +58,8 @@ build-image: ## Build the E2E testbed container image
 	@$(ROOT_DIR)/scripts/pull-base-images.sh $(E2E_PLATFORM) Dockerfile
 	@$(DOCKER) build \
 		--pull=never \
+		--network=host \
+		$(shell $(DOCKER) image exists $(E2E_IMAGE) 2>/dev/null && echo --cache-from $(E2E_IMAGE)) \
 		--platform $(E2E_PLATFORM) \
 		-t $(E2E_IMAGE) \
 		-f Dockerfile \
