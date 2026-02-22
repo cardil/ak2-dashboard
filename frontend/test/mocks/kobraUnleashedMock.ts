@@ -129,27 +129,6 @@ export function createKobraUnleashedHttpMiddleware(
   io: SocketIOServer,
 ): Connect.NextHandleFunction {
   return (req, res, next) => {
-    const url = new URL(req.url!, `http://${req.headers.host}`)
-
-    // Handle webserver config override
-    if (url.pathname === "/api/webserver.json") {
-      const apiUrlOverride = url.searchParams.get("api_url")
-      const mqtt_webui_url =
-        apiUrlOverride === null
-          ? `http://${req.headers.host}` // Default: point to the mock server itself
-          : apiUrlOverride // Use the provided override (e.g., "" for unconfigured)
-
-      const config = {
-        printer_model: "Kobra 2",
-        update_version: "3.0.7",
-        mqtt_webui_url: mqtt_webui_url,
-      }
-
-      res.writeHead(200, { "Content-Type": "application/json" })
-      res.end(JSON.stringify(config))
-      return
-    }
-
     // Handle Kobra Unleashed HTTP API mocks
     if (req.url?.startsWith("/api/")) {
       const filesUrlRegex = /^\/api\/printer\/([a-zA-Z0-9]+)\/files$/

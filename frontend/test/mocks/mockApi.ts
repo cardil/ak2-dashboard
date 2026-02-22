@@ -48,9 +48,11 @@ export function createMockApiMiddleware(
       const data = JSON.parse(fileContent)
 
       const apiUrlOverride = requestUrl.searchParams.get("api_url")
-      if (apiUrlOverride) {
-        data.mqtt_webui_url =
-          apiUrlOverride === "unavailable" ? "" : apiUrlOverride
+      // Use !== null (not truthy) to distinguish "param present with empty
+      // value" (?api_url= → unconfigured Kobra) from "param absent" (→ use
+      // default mock URL). Empty string is a valid override meaning "no Kobra".
+      if (apiUrlOverride !== null) {
+        data.mqtt_webui_url = apiUrlOverride
       } else {
         data.mqtt_webui_url = process.env.VITE_MOCK_MQTT_URL || defaultMqttUrl
       }
