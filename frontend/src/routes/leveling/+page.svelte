@@ -18,7 +18,8 @@
     faHdd,
     faUser,
   } from "@fortawesome/free-solid-svg-icons"
-  import { get } from "svelte/store"
+  import { get, type Unsubscriber } from "svelte/store"
+  import { onDestroy } from "svelte"
   import { levelingStore } from "$lib/stores/leveling"
   import { profilesStore } from "$lib/stores/profiles"
   import type { MeshProfile } from "$lib/stores/leveling"
@@ -79,7 +80,7 @@
   }
 
   // --- Store Subscription ---
-  levelingStore.subscribe((store) => {
+  const unsubLeveling: Unsubscriber = levelingStore.subscribe((store) => {
     if (store.settings && !store.isUpdating) {
       localSettings = { ...store.settings }
     }
@@ -89,6 +90,7 @@
       visualizedSlotId = "active"
     }
   })
+  onDestroy(unsubLeveling)
 
   // Reactive block to handle cases where the visualized mesh is deleted from the store
   $: if (

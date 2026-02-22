@@ -234,7 +234,7 @@ function createPrinterStore() {
     },
 
     startPrint: (printerId: string, filename: string) => {
-      emitCommand("start_print", { printerId: printerId, filename })
+      emitCommand("print_file", { printerId, file: filename })
     },
 
     pausePrint: (printerId: string) => {
