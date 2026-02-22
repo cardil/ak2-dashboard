@@ -29,6 +29,7 @@
   }
 
   function handleBackdropKeydown(event: KeyboardEvent) {
+    if (event.target !== event.currentTarget) return
     // Handle keyboard events on backdrop for accessibility
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault()
