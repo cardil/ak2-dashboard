@@ -42,8 +42,8 @@
       }
       fileBrowserStore.navigate(file.name)
     } else {
-      // Click to preview
-      if (file.size !== undefined && file.size < 100 * 1024) {
+      // Click to preview (allow when size unknown; block only if size known and too large)
+      if (file.size === undefined || file.size < 100 * 1024) {
         showPreview(file.name)
       } else {
         toast.error(
@@ -56,10 +56,11 @@
   async function downloadFile(fileName: string) {
     try {
       const currentPath = fileBrowserStore.getCurrentPath()
+      const encodedName = encodeURIComponent(fileName)
       const filePath =
         currentPath === "/"
-          ? `/files/${fileName}`
-          : `/files${currentPath}${fileName}`
+          ? `/files/${encodedName}`
+          : `/files${currentPath}${encodedName}`
       const response = await fetch(filePath)
       if (response.ok) {
         const blob = await response.blob()
@@ -80,10 +81,11 @@
   async function showPreview(fileName: string) {
     try {
       const currentPath = fileBrowserStore.getCurrentPath()
+      const encodedName = encodeURIComponent(fileName)
       const filePath =
         currentPath === "/"
-          ? `/files/${fileName}`
-          : `/files${currentPath}${fileName}`
+          ? `/files/${encodedName}`
+          : `/files${currentPath}${encodedName}`
       const response = await fetch(filePath)
       if (response.ok) {
         // Get as array buffer first to detect binary
