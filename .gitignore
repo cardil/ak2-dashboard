@@ -1,7 +1,9 @@
 .vscode/
 arm-*-cross
 src/*.o
+src/*.d
 src/api/*.o
+src/api/*.d
 src/vendor/
 src/webfsd
 src/webfsd.stripped

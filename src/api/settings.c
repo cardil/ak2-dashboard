@@ -18,9 +18,6 @@ extern config_option_t set_key_value(config_option_t conf_opt, char *key, char *
 extern int write_config_file(char *path, config_option_t conf_opt);
 extern config_option_t read_config_file(char *path);
 
-// External buffer from api.c
-extern char api_response_buffer[8192];
-
 // PUT /api/profiles/{id}/printer-mesh
 void handle_put_profile_printer_mesh(struct REQUEST *req, const char *profile_id_str) {
   int is_current = (strcmp(profile_id_str, "current") == 0);
@@ -28,30 +25,30 @@ void handle_put_profile_printer_mesh(struct REQUEST *req, const char *profile_id
   int status_code = 200;
 
   if (!is_current && (profile_id < 1 || profile_id > 20)) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid profile ID.\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 400);
     return;
   }
 
   if (!is_current && !dir_exists_profile(profile_id)) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Profile not found\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 404);
     return;
   }
 
   if (req->req_body == NULL) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Missing request body.\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 400);
     return;
@@ -59,10 +56,10 @@ void handle_put_profile_printer_mesh(struct REQUEST *req, const char *profile_id
 
   char *mesh_data = get_json_value(req->req_body, "\"mesh_data\"");
   if (!mesh_data) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid JSON payload. Missing 'mesh_data'.\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 400);
     return;
@@ -72,20 +69,20 @@ void handle_put_profile_printer_mesh(struct REQUEST *req, const char *profile_id
   const char *cfg_filename;
   if (is_current) {
     if (detect_printer_defaults(NULL, &config_file, NULL, NULL) != 0) {
-      snprintf(api_response_buffer, sizeof(api_response_buffer),
+      snprintf(req->response_buffer, sizeof(req->response_buffer),
               "{\"status\": \"error\", \"message\": \"Could not detect printer configuration file.\"}");
-      req->body = api_response_buffer;
-      req->lbody = strlen(api_response_buffer);
+      req->body = req->response_buffer;
+      req->lbody = strlen(req->response_buffer);
       req->mime = "application/json";
       mkheader(req, 500);
       return;
     }
   } else {
     if (detect_printer_defaults(NULL, NULL, &cfg_filename, NULL) != 0) {
-      snprintf(api_response_buffer, sizeof(api_response_buffer),
+      snprintf(req->response_buffer, sizeof(req->response_buffer),
               "{\"status\": \"error\", \"message\": \"Could not detect printer configuration.\"}");
-      req->body = api_response_buffer;
-      req->lbody = strlen(api_response_buffer);
+      req->body = req->response_buffer;
+      req->lbody = strlen(req->response_buffer);
       req->mime = "application/json";
       mkheader(req, 500);
       return;
@@ -97,21 +94,21 @@ void handle_put_profile_printer_mesh(struct REQUEST *req, const char *profile_id
 
   if (update_printer_config_file(config_file, "points", mesh_data) == 0) {
     if (is_current) {
-      snprintf(api_response_buffer, sizeof(api_response_buffer),
+      snprintf(req->response_buffer, sizeof(req->response_buffer),
               "{\"status\": \"success\", \"message\": \"Active printer mesh updated. Please reboot for changes to take effect.\"}");
     } else {
-      snprintf(api_response_buffer, sizeof(api_response_buffer),
+      snprintf(req->response_buffer, sizeof(req->response_buffer),
               "{\"status\": \"success\", \"message\": \"Profile mesh updated.\"}");
     }
     status_code = 200;
   } else {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Failed to update printer configuration.\"}");
     status_code = 500;
   }
 
-  req->body = api_response_buffer;
-  req->lbody = strlen(api_response_buffer);
+  req->body = req->response_buffer;
+  req->lbody = strlen(req->response_buffer);
   req->mime = "application/json";
   mkheader(req, status_code);
 }
@@ -122,30 +119,30 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
   int profile_id = is_current ? 0 : atoi(profile_id_str);
 
   if (!is_current && (profile_id < 1 || profile_id > 20)) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid profile ID.\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 400);
     return;
   }
 
   if (!is_current && !dir_exists_profile(profile_id)) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Profile not found\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 404);
     return;
   }
 
   if (req->req_body == NULL) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Missing request body.\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 400);
     return;
@@ -185,20 +182,20 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
   const char *cfg_filename;
   if (is_current) {
     if (detect_printer_defaults(NULL, &config_file, NULL, NULL) != 0) {
-      snprintf(api_response_buffer, sizeof(api_response_buffer),
+      snprintf(req->response_buffer, sizeof(req->response_buffer),
               "{\"status\": \"error\", \"message\": \"Could not detect printer configuration file.\"}");
-      req->body = api_response_buffer;
-      req->lbody = strlen(api_response_buffer);
+      req->body = req->response_buffer;
+      req->lbody = strlen(req->response_buffer);
       req->mime = "application/json";
       mkheader(req, 500);
       return;
     }
   } else {
     if (detect_printer_defaults(NULL, NULL, &cfg_filename, NULL) != 0) {
-      snprintf(api_response_buffer, sizeof(api_response_buffer),
+      snprintf(req->response_buffer, sizeof(req->response_buffer),
               "{\"status\": \"error\", \"message\": \"Could not detect printer configuration.\"}");
-      req->body = api_response_buffer;
-      req->lbody = strlen(api_response_buffer);
+      req->body = req->response_buffer;
+      req->lbody = strlen(req->response_buffer);
       req->mime = "application/json";
       mkheader(req, 500);
       return;
@@ -221,10 +218,10 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
           "0.000000%s", (i == (new_grid_size * new_grid_size - 1)) ? "" : ", ");
       }
       if (update_printer_config_file(config_file, "points", flat_mesh) != 0) {
-        snprintf(api_response_buffer, sizeof(api_response_buffer),
+        snprintf(req->response_buffer, sizeof(req->response_buffer),
                 "{\"status\": \"error\", \"message\": \"Failed to update mesh points.\"}");
-        req->body = api_response_buffer;
-        req->lbody = strlen(api_response_buffer);
+        req->body = req->response_buffer;
+        req->lbody = strlen(req->response_buffer);
         req->mime = "application/json";
         mkheader(req, 500);
         return;
@@ -250,10 +247,10 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
       char replacement_value[8];
       snprintf(replacement_value, sizeof(replacement_value), "%d,%d", new_grid_size, new_grid_size);
       if (update_printer_config_file(config_file, "probe_count", replacement_value) != 0) {
-        snprintf(api_response_buffer, sizeof(api_response_buffer),
+        snprintf(req->response_buffer, sizeof(req->response_buffer),
                 "{\"status\": \"error\", \"message\": \"Failed to update probe_count.\"}");
-        req->body = api_response_buffer;
-        req->lbody = strlen(api_response_buffer);
+        req->body = req->response_buffer;
+        req->lbody = strlen(req->response_buffer);
         req->mime = "application/json";
         mkheader(req, 500);
         return;
@@ -263,10 +260,10 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
 
   if (bed_temp_str) {
     if (update_printer_config_file(config_file, "bed_mesh_temp", bed_temp_str) != 0) {
-      snprintf(api_response_buffer, sizeof(api_response_buffer),
+      snprintf(req->response_buffer, sizeof(req->response_buffer),
               "{\"status\": \"error\", \"message\": \"Failed to update bed_mesh_temp.\"}");
-      req->body = api_response_buffer;
-      req->lbody = strlen(api_response_buffer);
+      req->body = req->response_buffer;
+      req->lbody = strlen(req->response_buffer);
       req->mime = "application/json";
       mkheader(req, 500);
       return;
@@ -292,16 +289,16 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
   // Log settings update
   if (is_current) {
     LOG( "Settings updated (grid_changed=%s)\n", grid_size_changed ? "yes" : "no");
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"success\", \"message\": \"Settings updated. Please reboot for changes to take effect.\", \"grid_size_changed\": %s}",
             grid_size_changed ? "true" : "false");
   } else {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"success\", \"message\": \"Profile settings updated.\", \"grid_size_changed\": %s}",
             grid_size_changed ? "true" : "false");
   }
-  req->body = api_response_buffer;
-  req->lbody = strlen(api_response_buffer);
+  req->body = req->response_buffer;
+  req->lbody = strlen(req->response_buffer);
   req->mime = "application/json";
   mkheader(req, 200);
 }

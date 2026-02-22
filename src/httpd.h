@@ -100,6 +100,9 @@ struct REQUEST {
 
     /* linked list */
     struct REQUEST *next;
+
+    /* per-request API response buffer (must be last to avoid layout changes) */
+    char response_buffer[8192];
 };
 
 /* --- string lists --------------------------------------------- */

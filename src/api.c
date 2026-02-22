@@ -1,6 +1,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/sysinfo.h>
+#include <sys/wait.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -20,9 +21,6 @@
 
 // External functions from request.c
 extern int file_exists(const char *path);
-
-// A buffer to hold the JSON response
-char api_response_buffer[8192];
 
 // Main API request handler
 void handle_api_request(struct REQUEST *req, char *filename) {
@@ -169,10 +167,10 @@ void handle_api_request(struct REQUEST *req, char *filename) {
   }
 
   // Fallback for unknown endpoints
-  snprintf(api_response_buffer, sizeof(api_response_buffer),
+  snprintf(req->response_buffer, sizeof(req->response_buffer),
           "{\"status\": \"error\", \"message\": \"API endpoint not found\"}");
-  req->body = api_response_buffer;
-  req->lbody = strlen(api_response_buffer);
+  req->body = req->response_buffer;
+  req->lbody = strlen(req->response_buffer);
   req->mime = "application/json";
   mkheader(req, 404);
 }
@@ -180,10 +178,10 @@ void handle_api_request(struct REQUEST *req, char *filename) {
 // POST /api/security/password - Change root password
 void handle_post_security_password(struct REQUEST *req) {
   if (req->req_body == NULL) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Missing request body.\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 400);
     return;
@@ -191,40 +189,92 @@ void handle_post_security_password(struct REQUEST *req) {
 
   char *password = get_json_value(req->req_body, "\"password\"");
   if (!password || strlen(password) == 0) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid JSON payload. Missing 'password'.\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 400);
     return;
   }
 
-  // Change root password using passwd (OpenWRT/TinaLinux compatible)
-  // passwd expects password on stdin twice (new password + confirmation)
-  // Output varies (4-5 lines):
-  //   Real printer: "Changing password for root\nNew password:\nRetype password:\npasswd: password for root changed by root"
-  //   Testbed: "Changing password for root\nNew password:\nBad password: too weak\nRetype password:\npasswd: password for root changed by root"
-  // Read enough lines to capture the last line with success message
-  char command[512];
-  snprintf(command, sizeof(command), "printf '%%s\\n%%s\\n' '%s' '%s' | passwd root 2>&1", password, password);
-  system_with_output(command, 6);  // Read up to 6 lines to ensure we get the success message
+  // Change root password using chpasswd via stdin pipe (avoids shell injection)
+  // chpasswd reads "user:password" from stdin
+  char chpasswd_input[512];
+  int input_len = snprintf(chpasswd_input, sizeof(chpasswd_input), "root:%s\n", password);
+  if (input_len < 0 || input_len >= (int)sizeof(chpasswd_input)) {
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
+            "{\"status\": \"error\", \"message\": \"Password too long.\"}");
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
+    req->mime = "application/json";
+    mkheader(req, 400);
+    return;
+  }
 
-  // Check for the specific success message: "password for root changed"
-  if (strstr(system_buffer, "password for root changed") != NULL) {
+  int pipefd[2];
+  if (pipe(pipefd) != 0) {
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
+            "{\"status\": \"error\", \"message\": \"Internal error (pipe).\"}");
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
+    req->mime = "application/json";
+    mkheader(req, 500);
+    return;
+  }
+
+  pid_t pid = fork();
+  if (pid < 0) {
+    close(pipefd[0]);
+    close(pipefd[1]);
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
+            "{\"status\": \"error\", \"message\": \"Internal error (fork).\"}");
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
+    req->mime = "application/json";
+    mkheader(req, 500);
+    return;
+  }
+
+  if (pid == 0) {
+    // Child: redirect stdin from pipe read end
+    close(pipefd[1]);
+    dup2(pipefd[0], STDIN_FILENO);
+    close(pipefd[0]);
+    // Redirect stdout/stderr to /dev/null
+    int devnull = open("/dev/null", 1);  /* O_WRONLY=1 */
+    if (devnull >= 0) {
+      dup2(devnull, STDOUT_FILENO);
+      dup2(devnull, STDERR_FILENO);
+      close(devnull);
+    }
+    execl("/usr/sbin/chpasswd", "chpasswd", (char *)NULL);
+    _exit(1);
+  }
+
+  // Parent: write password to pipe, then wait
+  close(pipefd[0]);
+  write(pipefd[1], chpasswd_input, input_len);
+  close(pipefd[1]);
+
+  int status = 0;
+  waitpid(pid, &status, 0);
+
+  if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
     LOG("Root password changed successfully\n");
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"success\", \"message\": \"Root password changed successfully\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 200);
   } else {
-    LOG("Failed to change root password: %s\n", system_buffer);
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    LOG("Failed to change root password: chpasswd exited with %d\n",
+        WIFEXITED(status) ? WEXITSTATUS(status) : -1);
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Failed to change password\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 500);
   }
@@ -259,16 +309,16 @@ void handle_get_system(struct REQUEST *req) {
     char line[256];
     if (fgets(line, sizeof(line), fp)) {
       char cpu[10];
-      int t0, t1, t2, t3, t4, t5, t6, t7, t8, t9;
-      int n = sscanf(line, "%s %d %d %d %d %d %d %d %d %d %d",
+      unsigned long long t0, t1, t2, t3, t4, t5, t6, t7, t8, t9;
+      int n = sscanf(line, "%s %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu",
         cpu, &t0, &t1, &t2, &t3, &t4, &t5, &t6, &t7, &t8, &t9);
       if (n == 11) {
-        unsigned long long total = (unsigned long long)t0 + t2 + t3;
+        unsigned long long total = t0 + t2 + t3;
         if (total > 0) {
-          cpu_use = (((unsigned long long)t0 + t2) * 100) / total;
-          cpu_usr_use = ((unsigned long long)t0 * 100) / total;
-          cpu_sys_use = ((unsigned long long)t2 * 100) / total;
-          cpu_idle = ((unsigned long long)t3 * 100) / total;
+          cpu_use = (unsigned int)(((t0 + t2) * 100) / total);
+          cpu_usr_use = (unsigned int)((t0 * 100) / total);
+          cpu_sys_use = (unsigned int)((t2 * 100) / total);
+          cpu_idle = (unsigned int)((t3 * 100) / total);
         }
       }
     }
@@ -310,16 +360,16 @@ void handle_get_system(struct REQUEST *req) {
     ssh_status = found_dropbear ? 2 : 1;  // 2=running, 1=stopped
   }
 
-  // Build JSON response in memory
-  snprintf(api_response_buffer, sizeof(api_response_buffer),
+  // Build JSON response in per-request buffer
+  snprintf(req->response_buffer, sizeof(req->response_buffer),
           "{\"api_ver\":1, \"total_mem\":%llu, \"free_mem\":%llu, \"free_mem_per\":%llu, "
           "\"cpu_use\":%u, \"cpu_usr_use\":%u, \"cpu_sys_use\":%u, \"cpu_idle\":%u, "
           "\"ssh_status\":%d, \"uptime\": \"%02d:%02d:%02d\"}",
           (unsigned long long)total_mem, (unsigned long long)free_mem, (unsigned long long)free_mem_per,
           cpu_use, cpu_usr_use, cpu_sys_use, cpu_idle, ssh_status, ut_h, ut_m, ut_s);
 
-  req->body = api_response_buffer;
-  req->lbody = strlen(api_response_buffer);
+  req->body = req->response_buffer;
+  req->lbody = strlen(req->response_buffer);
   req->mime = "application/json";
   mkheader(req, 200);
 }
@@ -329,10 +379,10 @@ void handle_post_system_reboot(struct REQUEST *req) {
   LOG("System reboot requested\n");
   system_with_output("sync && reboot &", 1);
 
-  snprintf(api_response_buffer, sizeof(api_response_buffer),
+  snprintf(req->response_buffer, sizeof(req->response_buffer),
           "{\"status\": \"success\", \"message\": \"System is rebooting\"}");
-  req->body = api_response_buffer;
-  req->lbody = strlen(api_response_buffer);
+  req->body = req->response_buffer;
+  req->lbody = strlen(req->response_buffer);
   req->mime = "application/json";
   mkheader(req, 200);
 }
@@ -340,10 +390,10 @@ void handle_post_system_reboot(struct REQUEST *req) {
 // POST /api/system/ssh - Start/stop SSH service
 void handle_post_system_ssh(struct REQUEST *req) {
   if (req->req_body == NULL) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Missing request body.\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 400);
     return;
@@ -351,10 +401,10 @@ void handle_post_system_ssh(struct REQUEST *req) {
 
   char *action = get_json_value(req->req_body, "\"action\"");
   if (!action) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid JSON payload. Missing 'action'.\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 400);
     return;
@@ -364,32 +414,32 @@ void handle_post_system_ssh(struct REQUEST *req) {
     LOG("Starting SSH service...\n");
     system_with_output("/opt/etc/init.d/S51dropbear start 2>&1", 1);
     LOG("SSH service started\n");
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"success\", \"message\": \"SSH service started\"}");
   } else if (strcmp(action, "stop") == 0) {
     LOG("Stopping SSH service...\n");
     system_with_output("/opt/etc/init.d/S51dropbear stop 2>&1", 1);
     LOG("SSH service stopped\n");
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"success\", \"message\": \"SSH service stopped\"}");
   } else if (strcmp(action, "restart") == 0) {
     LOG("Restarting SSH service...\n");
     system_with_output("/opt/etc/init.d/S51dropbear restart 2>&1", 1);
     LOG("SSH service restarted\n");
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"success\", \"message\": \"SSH service restarted\"}");
   } else {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid action. Use 'start', 'stop', or 'restart'.\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 400);
     return;
   }
 
-  req->body = api_response_buffer;
-  req->lbody = strlen(api_response_buffer);
+  req->body = req->response_buffer;
+  req->lbody = strlen(req->response_buffer);
   req->mime = "application/json";
   mkheader(req, 200);
 }
@@ -399,10 +449,10 @@ void handle_post_system_poweroff(struct REQUEST *req) {
   LOG("System poweroff requested\n");
   system_with_output("sync && poweroff &", 1);
 
-  snprintf(api_response_buffer, sizeof(api_response_buffer),
+  snprintf(req->response_buffer, sizeof(req->response_buffer),
           "{\"status\": \"success\", \"message\": \"System is shutting down\"}");
-  req->body = api_response_buffer;
-  req->lbody = strlen(api_response_buffer);
+  req->body = req->response_buffer;
+  req->lbody = strlen(req->response_buffer);
   req->mime = "application/json";
   mkheader(req, 200);
 }
@@ -413,10 +463,10 @@ void handle_post_system_log_clear(struct REQUEST *req) {
   system_with_output("cat /dev/null > /mnt/UDISK/log", 1);
   LOG("Log cleared\n");
 
-  snprintf(api_response_buffer, sizeof(api_response_buffer),
+  snprintf(req->response_buffer, sizeof(req->response_buffer),
           "{\"status\": \"success\", \"message\": \"Log cleared\"}");
-  req->body = api_response_buffer;
-  req->lbody = strlen(api_response_buffer);
+  req->body = req->response_buffer;
+  req->lbody = strlen(req->response_buffer);
   req->mime = "application/json";
   mkheader(req, 200);
 }
@@ -427,10 +477,10 @@ void handle_get_webserver(struct REQUEST *req) {
   FILE *fp = fopen(config_path, "r");
   if (!fp) {
     LOG("webserver config not found: %s\n", config_path);
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"webserver.json not found\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 404);
     return;
@@ -439,30 +489,30 @@ void handle_get_webserver(struct REQUEST *req) {
   // Read file content (max buffer size)
   size_t total_read = 0;
   int ch;
-  while ((ch = fgetc(fp)) != EOF && total_read < sizeof(api_response_buffer) - 1) {
-    api_response_buffer[total_read++] = (char)ch;
+  while ((ch = fgetc(fp)) != EOF && total_read < sizeof(req->response_buffer) - 1) {
+    req->response_buffer[total_read++] = (char)ch;
   }
-  api_response_buffer[total_read] = '\0';
+  req->response_buffer[total_read] = '\0';
   fclose(fp);
 
   // Validate it's parseable JSON
   jsmn_parser parser;
   jsmntok_t tokens[32];
   jsmn_init(&parser);
-  int token_count = jsmn_parse(&parser, api_response_buffer, total_read, tokens, 32);
+  int token_count = jsmn_parse(&parser, req->response_buffer, total_read, tokens, 32);
   if (token_count < 1) {
     LOG("Failed to parse webserver.json\n");
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Failed to parse webserver.json\"}");
-    req->body = api_response_buffer;
-    req->lbody = strlen(api_response_buffer);
+    req->body = req->response_buffer;
+    req->lbody = strlen(req->response_buffer);
     req->mime = "application/json";
     mkheader(req, 500);
     return;
   }
 
   // Return raw file bytes as-is
-  req->body = api_response_buffer;
+  req->body = req->response_buffer;
   req->lbody = total_read;
   req->mime = "application/json";
   mkheader(req, 200);

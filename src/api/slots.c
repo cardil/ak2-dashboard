@@ -11,9 +11,6 @@
 // External functions from request.c
 extern int custom_copy_file(const char *from, const char *to, const char *mode, const char *buffer);
 
-// External buffer from api.c
-extern char api_response_buffer[8192];
-
 // PUT /api/profiles/{id}/slots/{n}
 void handle_put_profile_slot(struct REQUEST *req, const char *profile_id_str, int slot_id) {
   int is_current = (strcmp(profile_id_str, "current") == 0);
@@ -21,19 +18,19 @@ void handle_put_profile_slot(struct REQUEST *req, const char *profile_id_str, in
   int status_code = 200;
 
   if (!is_current && (profile_id < 1 || profile_id > 20)) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid profile ID.\"}");
     status_code = 400;
   } else if (slot_id <= 0 || slot_id >= 100) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid slot ID.\"}");
     status_code = 400;
   } else if (!is_current && !dir_exists_profile(profile_id)) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Profile not found\"}");
     status_code = 404;
   } else if (req->req_body == NULL) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Missing request body.\"}");
     status_code = 400;
   } else {
@@ -56,22 +53,22 @@ void handle_put_profile_slot(struct REQUEST *req, const char *profile_id_str, in
         } else {
           LOG( "Mesh saved to profile %d slot %d\n", profile_id, slot_id);
         }
-        snprintf(api_response_buffer, sizeof(api_response_buffer),
+        snprintf(req->response_buffer, sizeof(req->response_buffer),
                 "{\"status\": \"success\", \"message\": \"Mesh saved to slot %d.\"}", slot_id);
         status_code = 200;
       } else {
-        snprintf(api_response_buffer, sizeof(api_response_buffer),
+        snprintf(req->response_buffer, sizeof(req->response_buffer),
                 "{\"status\": \"error\", \"message\": \"Failed to write to file.\"}");
         status_code = 500;
       }
     } else {
-      snprintf(api_response_buffer, sizeof(api_response_buffer),
+      snprintf(req->response_buffer, sizeof(req->response_buffer),
               "{\"status\": \"error\", \"message\": \"Invalid JSON payload. Missing 'mesh_data'.\"}");
       status_code = 400;
     }
   }
-  req->body = api_response_buffer;
-  req->lbody = strlen(api_response_buffer);
+  req->body = req->response_buffer;
+  req->lbody = strlen(req->response_buffer);
   req->mime = "application/json";
   mkheader(req, status_code);
 }
@@ -83,15 +80,15 @@ void handle_delete_profile_slot(struct REQUEST *req, const char *profile_id_str,
   int status_code = 200;
 
   if (!is_current && (profile_id < 1 || profile_id > 20)) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid profile ID.\"}");
     status_code = 400;
   } else if (slot_id <= 0 || slot_id >= 100) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid slot ID.\"}");
     status_code = 400;
   } else if (!is_current && !dir_exists_profile(profile_id)) {
-    snprintf(api_response_buffer, sizeof(api_response_buffer),
+    snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Profile not found\"}");
     status_code = 404;
   } else {
@@ -109,17 +106,17 @@ void handle_delete_profile_slot(struct REQUEST *req, const char *profile_id_str,
       } else {
         LOG( "Profile %d mesh slot %d deleted\n", profile_id, slot_id);
       }
-      snprintf(api_response_buffer, sizeof(api_response_buffer),
+      snprintf(req->response_buffer, sizeof(req->response_buffer),
               "{\"status\": \"success\", \"message\": \"Mesh slot %d deleted.\"}", slot_id);
       status_code = 200;
     } else {
-      snprintf(api_response_buffer, sizeof(api_response_buffer),
+      snprintf(req->response_buffer, sizeof(req->response_buffer),
               "{\"status\": \"error\", \"message\": \"Could not delete mesh slot %d. It may not exist.\"}", slot_id);
       status_code = 404;
     }
   }
-  req->body = api_response_buffer;
-  req->lbody = strlen(api_response_buffer);
+  req->body = req->response_buffer;
+  req->lbody = strlen(req->response_buffer);
   req->mime = "application/json";
   mkheader(req, status_code);
 }

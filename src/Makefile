@@ -34,7 +34,8 @@ CFLAGS := -DMIMEFILE=\""/etc/mime.types"\" \
 	-g \
 	-funwind-tables \
 	-fno-omit-frame-pointer \
-	-std=gnu99
+	-std=gnu99 \
+	-MMD -MP
 # Dynamic linking with glibc (printer already has glibc 2.23 loaded)
 LDFLAGS := -rdynamic -lm -lpthread
 
@@ -48,6 +49,7 @@ CC = $(DOCKER_RUN) gcc
 
 SOURCE_FILES := $(wildcard *.c *.h api/*.c api/*.h)
 OBJ := $(patsubst %.c,%.o,$(wildcard *.c)) $(patsubst %.c,%.o,$(wildcard api/*.c))
+DEPS := $(OBJ:.o=.d)
 TARGET := webfsd
 TARGET_DIR := ../webserver/opt/bin
 TARGET_PATH := $(TARGET_DIR)/$(TARGET)
@@ -120,6 +122,9 @@ compile: lint compile-only ## Compile the sources (runs also: init)
 	@echo "$(BLUE)➜ Compiling $@...$(NC)"
 	@$(CC) $(CFLAGS) -c $< -o $@
 
+# Include auto-generated header dependencies (produced by -MMD -MP)
+-include $(DEPS)
+
 export-bin: $(TARGET) $(TARGET_PATH) ## Export the binary
 
 $(TARGET_PATH): $(TARGET)
@@ -134,6 +139,7 @@ build: compile build-only ## Build the backend (runs also: init, compile)
 clean: ## Clean the backend
 	@echo "$(BLUE)➜ Cleaning backend...$(NC)"
 	rm -f $(OBJ) \
+		$(DEPS) \
 		$(TARGET) \
 		$(TARGET_PATH) \
 		$(LINT_STAMP)
