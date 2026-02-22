@@ -4,7 +4,7 @@
   import { systemInfo } from "$lib/stores/system"
   import { faPowerOff, faSync } from "@fortawesome/free-solid-svg-icons"
   import Fa from "svelte-fa"
-  import { formatDuration } from "$lib/utils/time"
+  import { formatDuration, parseUptime } from "$lib/utils/time"
   import "./system-tools.css"
 
   export let onShowConfirmationModal: (action: "reboot" | "poweroff") => void
@@ -16,16 +16,6 @@
   $: cpuTitle = $systemInfo
     ? `Used CPU: ${$systemInfo.cpu_use}%; User: ${$systemInfo.cpu_usr_use}%; System: ${$systemInfo.cpu_sys_use}%`
     : ""
-
-  function parseUptime(uptimeString: string): number {
-    if (!uptimeString || typeof uptimeString !== "string") return 0
-    const parts = uptimeString.split(":").map(Number)
-    if (parts.length === 3 && parts.every((p) => !isNaN(p))) {
-      const [hours, minutes, seconds] = parts
-      return hours * 3600 + minutes * 60 + seconds
-    }
-    return 0
-  }
 </script>
 
 <Card>

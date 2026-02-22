@@ -1,4 +1,19 @@
 /**
+ * Parses an uptime string in "HH:MM:SS" format into a total number of seconds.
+ * @param uptimeString The uptime string to parse.
+ * @returns The total number of seconds, or 0 if the string is invalid.
+ */
+export function parseUptime(uptimeString: string): number {
+  if (!uptimeString || typeof uptimeString !== "string") return 0
+  const parts = uptimeString.split(":").map(Number)
+  if (parts.length === 3 && parts.every((p) => !isNaN(p))) {
+    const [hours, minutes, seconds] = parts
+    return hours * 3600 + minutes * 60 + seconds
+  }
+  return 0
+}
+
+/**
  * Formats a Unix timestamp into a human-readable duration string representing the time elapsed
  * since the timestamp. It uses the same formatting as formatDuration.
  * @param timestamp The Unix timestamp in seconds.

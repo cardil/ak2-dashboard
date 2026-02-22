@@ -1,6 +1,6 @@
 <script lang="ts">
   import Card from "$lib/components/Card.svelte"
-  import { formatDuration } from "$lib/utils/time"
+  import { formatDuration, parseUptime } from "$lib/utils/time"
 
   export let totalMemory: number
   export let freeMemory: number
@@ -19,16 +19,6 @@
   $: cpuTitle = `Used CPU: ${cpuTotalUsage}%; User: ${cpuUserUsage}%; System: ${cpuSystemUsage}%`
 
   $: uptimeInSeconds = parseUptime(uptime)
-
-  function parseUptime(uptimeString: string): number {
-    if (!uptimeString || typeof uptimeString !== "string") return 0
-    const parts = uptimeString.split(":").map(Number)
-    if (parts.length === 3 && parts.every((p) => !isNaN(p))) {
-      const [hours, minutes, seconds] = parts
-      return hours * 3600 + minutes * 60 + seconds
-    }
-    return 0
-  }
 </script>
 
 <Card>
