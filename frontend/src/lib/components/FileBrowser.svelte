@@ -19,6 +19,8 @@
   import { toast } from "svelte-sonner"
   import { isBinaryContent, generateHexDump } from "$lib/utils/binary"
 
+  const MAX_PREVIEW_SIZE = 200 * 1024 // 200 KB (matches log reader limit)
+
   let isPreviewOpen = false
   let previewContent = ""
   let previewTitle = ""
@@ -42,8 +44,8 @@
       }
       fileBrowserStore.navigate(file.name)
     } else {
-      // Click to preview (allow when size unknown; block only if size known and too large)
-      if (file.size === undefined || file.size < 100 * 1024) {
+      // Click to preview only when size is known and within limit
+      if (file.size !== undefined && file.size <= MAX_PREVIEW_SIZE) {
         showPreview(file.name)
       } else {
         toast.error(

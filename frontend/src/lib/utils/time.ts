@@ -8,6 +8,7 @@ export function parseUptime(uptimeString: string): number {
   const parts = uptimeString.split(":").map(Number)
   if (parts.length === 3 && parts.every((p) => !isNaN(p))) {
     const [hours, minutes, seconds] = parts
+    if (minutes < 0 || minutes > 59 || seconds < 0 || seconds > 59) return 0
     return hours * 3600 + minutes * 60 + seconds
   }
   return 0
