@@ -15,10 +15,15 @@ on:
 
 env:
   USE_DOCKER: 1
+  CC_CACHE_IMAGE: ghcr.io/${{ github.repository_owner }}/ak2-dashboard/arm-cross-cc
+  E2E_CACHE_IMAGE: ghcr.io/${{ github.repository_owner }}/ak2-dashboard/e2e-testbed
 
 jobs:
   checks:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -34,27 +39,24 @@ jobs:
         with:
           platforms: arm
 
-      - name: Restore cross-compiler image cache
-        id: cache-cc-image
-        uses: actions/cache@v4
+      - name: Log in to ghcr.io
+        uses: redhat-actions/podman-login@v1
         with:
-          path: /tmp/arm-cross-cc.tar
-          key: podman-arm-cross-cc-${{ hashFiles('src/build.Dockerfile') }}
-
-      - name: Load cross-compiler image from cache
-        if: steps.cache-cc-image.outputs.cache-hit == 'true'
-        run: podman load -i /tmp/arm-cross-cc.tar
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run linting and tests
         run: make lint test
-
-      - name: Save cross-compiler image to cache
-        if: steps.cache-cc-image.outputs.cache-hit != 'true'
-        run: podman save localhost/arm-cross-cc -o /tmp/arm-cross-cc.tar
+        env:
+          DOCKER_CACHE_IMAGE: ${{ env.CC_CACHE_IMAGE }}
 
   build:
     needs: checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -70,23 +72,17 @@ jobs:
         with:
           platforms: arm
 
-      - name: Restore cross-compiler image cache
-        id: cache-cc-image
-        uses: actions/cache@v4
+      - name: Log in to ghcr.io
+        uses: redhat-actions/podman-login@v1
         with:
-          path: /tmp/arm-cross-cc.tar
-          key: podman-arm-cross-cc-${{ hashFiles('src/build.Dockerfile') }}
-
-      - name: Load cross-compiler image from cache
-        if: steps.cache-cc-image.outputs.cache-hit == 'true'
-        run: podman load -i /tmp/arm-cross-cc.tar
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build project
         run: make
-
-      - name: Save cross-compiler image to cache
-        if: steps.cache-cc-image.outputs.cache-hit != 'true'
-        run: podman save localhost/arm-cross-cc -o /tmp/arm-cross-cc.tar
+        env:
+          DOCKER_CACHE_IMAGE: ${{ env.CC_CACHE_IMAGE }}
 
       - name: Upload package
         uses: actions/upload-artifact@v4
@@ -102,6 +98,9 @@ jobs:
   e2e:
     needs: checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -122,27 +121,12 @@ jobs:
       - name: Install Playwright system dependencies
         run: npx --yes playwright install-deps chromium
 
-      - name: Restore cross-compiler image cache
-        id: cache-cc-image
-        uses: actions/cache@v4
+      - name: Log in to ghcr.io
+        uses: redhat-actions/podman-login@v1
         with:
-          path: /tmp/arm-cross-cc.tar
-          key: podman-arm-cross-cc-${{ hashFiles('src/build.Dockerfile') }}
-
-      - name: Load cross-compiler image from cache
-        if: steps.cache-cc-image.outputs.cache-hit == 'true'
-        run: podman load -i /tmp/arm-cross-cc.tar
-
-      - name: Restore testbed image cache
-        id: cache-testbed-image
-        uses: actions/cache@v4
-        with:
-          path: /tmp/e2e-testbed.tar
-          key: podman-e2e-testbed-${{ hashFiles('e2e/Dockerfile', 'e2e/config/**', 'e2e/scripts/**') }}
-
-      - name: Load testbed image from cache
-        if: steps.cache-testbed-image.outputs.cache-hit == 'true'
-        run: podman load -i /tmp/e2e-testbed.tar
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run E2E pipeline
         run: make e2e
@@ -152,14 +136,8 @@ jobs:
           E2E_UI_TRANSITION_TIMEOUT: 2000
           E2E_PAGE_LOAD_TIMEOUT: 5000
           E2E_LOG_REFRESH_TIMEOUT: 3000
-
-      - name: Save cross-compiler image to cache
-        if: steps.cache-cc-image.outputs.cache-hit != 'true'
-        run: podman save localhost/arm-cross-cc -o /tmp/arm-cross-cc.tar
-
-      - name: Save testbed image to cache
-        if: steps.cache-testbed-image.outputs.cache-hit != 'true'
-        run: podman save localhost/e2e_printer-testbed -o /tmp/e2e-testbed.tar
+          DOCKER_CACHE_IMAGE: ${{ env.CC_CACHE_IMAGE }}
+          E2E_CACHE_IMAGE: ${{ env.E2E_CACHE_IMAGE }}
 
       - name: Upload Playwright report
         if: failure()
