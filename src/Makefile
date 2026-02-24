@@ -17,6 +17,8 @@ ARROW := $(BLUE)➜$(NC)
 DOCKER := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
 DOCKER_IMAGE := localhost/arm-cross-cc
 DOCKER_PLATFORM := linux/arm/v7
+# Optional registry image for build cache (registry/repo format, no tag - podman --cache-from/--cache-to)
+DOCKER_CACHE_IMAGE ?=
 
 # JSON library configuration
 JSMN_DIR := ./vendor/jsmn
@@ -83,7 +85,7 @@ docker-image: ## Build container image for cross-compilation
 	@$(CURDIR)/../scripts/pull-base-images.sh $(DOCKER_PLATFORM) build.Dockerfile
 	@$(DOCKER) build \
 		--pull=never \
-		$(shell $(DOCKER) image exists $(DOCKER_IMAGE) 2>/dev/null && echo --cache-from $(DOCKER_IMAGE)) \
+		$(if $(DOCKER_CACHE_IMAGE),--layers --cache-from $(DOCKER_CACHE_IMAGE) --cache-to $(DOCKER_CACHE_IMAGE)) \
 		--platform $(DOCKER_PLATFORM) \
 		-t $(DOCKER_IMAGE) \
 		-f build.Dockerfile .

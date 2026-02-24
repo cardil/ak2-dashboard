@@ -34,6 +34,8 @@ E2E_SOURCES := $(shell find $(ROOT_DIR)/src -type f \( -name '*.c' -o -name '*.h
 E2E_IMAGE := localhost/e2e_printer-testbed
 E2E_CONTAINER := ak2-testbed
 E2E_PLATFORM := linux/arm/v7
+# Optional registry image for build cache (registry/repo format, no tag - podman --cache-from/--cache-to)
+E2E_CACHE_IMAGE ?=
 
 # E2E testbed ports
 E2E_SSH_PORT ?= 20022
@@ -59,7 +61,7 @@ build-image: ## Build the E2E testbed container image
 	@$(DOCKER) build \
 		--pull=never \
 		--network=host \
-		$(shell $(DOCKER) image exists $(E2E_IMAGE) 2>/dev/null && echo --cache-from $(E2E_IMAGE)) \
+		$(if $(E2E_CACHE_IMAGE),--layers --cache-from $(E2E_CACHE_IMAGE) --cache-to $(E2E_CACHE_IMAGE)) \
 		--platform $(E2E_PLATFORM) \
 		-t $(E2E_IMAGE) \
 		-f Dockerfile \
