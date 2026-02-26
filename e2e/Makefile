@@ -47,8 +47,8 @@ E2E_HTTP_PORT ?= 20080
 E2E_GEN_MESH_CMD ?= sshpass -p 'toor' ssh -o StrictHostKeyChecking=no \
 	-o UserKnownHostsFile=/dev/null -p $(E2E_SSH_PORT) root@localhost '/opt/scripts/gen-bed-mesh.sh'
 
-.PHONY: up down deploy gen-mesh clean test test-ui test-debug test-headed init help all-clean \
-	build-image
+.PHONY: up down deploy gen-mesh clean test test-ui test-debug test-headed test-perf init help \
+	all-clean build-image
 
 build-image: ## Build the E2E testbed container image
 	@echo ""
@@ -183,11 +183,19 @@ test-headed: init ## Run E2E tests with browser visible
 		npm run test:headed
 	@echo ""
 
-all: $(E2E_ALL_STAMP) ## Run the full E2E pipeline: up, deploy, test, down
+test-perf: init ## Run memory leak detection perf test (requires testbed running)
+	@echo ""
+	@echo "$(BLUE)➜ Running memory leak detection perf test...$(NC)"
+	@E2E_BASE_URL=http://localhost:$(E2E_HTTP_PORT) \
+		npm run test:perf
+	@echo ""
+
+all: $(E2E_ALL_STAMP) ## Run the full E2E pipeline: up, deploy, test-perf, test, down
 
 $(E2E_ALL_STAMP): $(E2E_SOURCES) node_modules/.playwright-installed
 	@$(MAKE) up
 	@$(MAKE) deploy
+	@$(MAKE) test-perf
 	@$(MAKE) test
 	@$(MAKE) down
 	@mkdir -p $(STAMP_DIR)
