@@ -245,7 +245,8 @@ int read_mesh_from_config_file(const char *config_path) {
                     // found "points : "
 
                     // keep a copy of the original line
-                    strcpy(mesh_config, &b[9]);
+                    strncpy(mesh_config, &b[9], MESH_BUFFER_SIZE - 1);
+                    mesh_config[MESH_BUFFER_SIZE - 1] = '\0';
 
                     mesh_grid = mesh_grid_size_from_csv(&b[9]);
 
