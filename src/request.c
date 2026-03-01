@@ -19,7 +19,6 @@
 #include "api.h"
 #include "httpd.h"
 
-typedef uint8_t BYTE;
 typedef uint16_t WORD;
 typedef uint32_t DWORD;
 typedef uint64_t QWORD;
@@ -31,264 +30,6 @@ typedef uint32_t U32;
 typedef int32_t S32;
 typedef uint64_t U64;
 typedef int64_t S64;
-
-const BYTE GRID[] = {
-    0,
-    1,
-    0,
-    0,
-    2,  // 4
-    0,
-    0,
-    0,
-    0,
-    3,  // 9
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    4,  // 16
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    5,  // 25
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    6,  // 36
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    7,  // 49
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    8,  // 64
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    9,  // 81
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    10,  // 100
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    11,  // 121
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    12,  // 144
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0};
 
 #define SYSTEM_BUFFER_MAX 1024
 char system_buffer[SYSTEM_BUFFER_MAX];
@@ -448,14 +189,19 @@ void mesh_config_clear(void) {
     memset(mesh_config, 0, MESH_BUFFER_SIZE);
 }
 
-// count comma-separated elements in mesh CSV string (returns element count)
-static int count_mesh_elements(const char *buffer) {
-    int count = 1;
+// Count comma-separated elements and return the grid side length (integer sqrt).
+// A 5x5 mesh has 25 elements -> returns 5; 7x7 has 49 -> returns 7; etc.
+static int mesh_grid_size_from_csv(const char *buffer) {
     if (!buffer || buffer[0] == '\n' || buffer[0] == '\0') return 0;
+    int count = 1;
     for (int i = 0; buffer[i] && buffer[i] != '\n'; i++) {
         if (buffer[i] == ',') count++;
     }
-    return count;
+    // Integer square root: find n such that n*n == count
+    for (int n = 2; n <= 12; n++) {
+        if (n * n == count) return n;
+    }
+    return 0;  // not a perfect square / unsupported grid
 }
 
 // results:
@@ -474,7 +220,7 @@ int read_mesh_from_config_file(const char *config_path) {
         char *b = NULL;
         size_t len = 0;
         ssize_t read;
-        int n, nn;
+        int n;
 
         // clear the result
         mesh_config_clear();
@@ -501,8 +247,7 @@ int read_mesh_from_config_file(const char *config_path) {
                     // keep a copy of the original line
                     strcpy(mesh_config, &b[9]);
 
-                    nn = count_mesh_elements(&b[9]);
-                    mesh_grid = GRID[nn & 0xFF];
+                    mesh_grid = mesh_grid_size_from_csv(&b[9]);
 
                     result = 0;
                 } else if (b[0] == 'z' && b[1] == '_' && b[2] == 'o' && b[3] == 'f' && b[4] == 'f' &&
