@@ -163,7 +163,6 @@ static int v_process_image(const char *filename, const void *p, int size) {
                 // Convert YUY2 to RGB
                 YUY2_to_RGB(p, rgb_data, 640, 480);
                 int padded_size = (640 * 3 + 3) & ~3;
-                int file_size = 54 + padded_size * 480;
                 int zero_padding = padded_size - 640 * 3;
                 fwrite(bmp_header, 54, 1, ofptr);
                 for (int i = 480 - 1; i >= 0; i--) {

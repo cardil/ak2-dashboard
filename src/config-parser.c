@@ -168,7 +168,7 @@ char *get_key_value(config_option_t conf_opt, char *key, char *def_value) {
 config_option_t read_config_file_from_get_request(char *parameters) {
     config_option_t last_co_addr = NULL;
     config_option_t co = NULL;
-    char k_or_v, more;
+    char more;
     char *p;
     char *k;
     char *v;
@@ -176,7 +176,6 @@ config_option_t read_config_file_from_get_request(char *parameters) {
     // set the initial state
     p = parameters;
     k = p;
-    k_or_v = 0;
     v = NULL;
 
     // check for empty parameter list
@@ -193,7 +192,6 @@ config_option_t read_config_file_from_get_request(char *parameters) {
             // end of the key
             p[0] = 0;   // fix the end of the key
             v = p + 1;  // set the value begin
-            k_or_v = 1;
         } else {
             if ((p[0] == '&') || (!p[0])) {
                 more = p[0];
@@ -217,7 +215,6 @@ config_option_t read_config_file_from_get_request(char *parameters) {
                         memset(co, 0, sizeof(config_option));
                     }
                     k = p + 1;
-                    k_or_v = 0;
                     v = NULL;
                 } else {
                     if (co)

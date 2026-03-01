@@ -24,6 +24,7 @@ extern int file_exists(const char *path);
 
 // Main API request handler
 void handle_api_request(struct REQUEST *req, char *filename) {
+    (void)filename;  // required by the request handler signature, not used directly
   req->cache_turn_off = 'Y';
 
   // GET /api/profiles

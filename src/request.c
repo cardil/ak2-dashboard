@@ -385,7 +385,7 @@ int update_printer_config_file(const char *config_file, const char *parameter_na
     char *b = NULL;
     size_t len = 0;
     ssize_t read;
-    int i, n;
+    int n;
     char par[128];
     int par_size;
     char eol[2];
@@ -457,6 +457,7 @@ static time_t last_webcam_request_time = 0;
 static pthread_mutex_t webcam_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void *webcam_capture_thread(void *arg) {
+    (void)arg;  // required by pthread_create signature, not used
     pthread_detach(pthread_self());
 
     if (debug) LOG( "+++ webcam thread: starting\n");
@@ -505,7 +506,7 @@ void *webcam_capture_thread(void *arg) {
 // CUSTOM PAGES
 void process_custom_pages(char *filename_str, struct REQUEST *req) {
     // parse the query
-    config_option_t query, co;
+    config_option_t query;
     query = read_config_file_from_get_request(req->query);
 
     // parse the configuration file if not already done
