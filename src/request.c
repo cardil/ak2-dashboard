@@ -197,8 +197,8 @@ static int mesh_grid_size_from_csv(const char *buffer) {
     for (int i = 0; buffer[i] && buffer[i] != '\n'; i++) {
         if (buffer[i] == ',') count++;
     }
-    // Integer square root: find n such that n*n == count
-    for (int n = 2; n <= 12; n++) {
+    // Integer square root: find n such that n*n == count, bounded by MAX_SUPPORTED_GRID_SIZE
+    for (int n = 2; n <= MAX_SUPPORTED_GRID_SIZE; n++) {
         if (n * n == count) return n;
     }
     return 0;  // not a perfect square / unsupported grid
@@ -244,13 +244,19 @@ int read_mesh_from_config_file(const char *config_path) {
                 if (b[0] == 'p' && b[1] == 'o' && b[2] == 'i' && b[3] == 'n' && b[4] == 't' && b[5] == 's' && b[6] == ' ' && b[7] == ':' && b[8] == ' ') {
                     // found "points : "
 
-                    // keep a copy of the original line
+                    // Validate length before copying to prevent truncated-mesh acceptance
+                    size_t points_len = strcspn(&b[9], "\n");
+                    if (points_len >= MESH_BUFFER_SIZE) {
+                        result = 2;
+                        continue;
+                    }
+                    // keep a bounded copy of the original line
                     strncpy(mesh_config, &b[9], MESH_BUFFER_SIZE - 1);
                     mesh_config[MESH_BUFFER_SIZE - 1] = '\0';
 
-                    mesh_grid = mesh_grid_size_from_csv(&b[9]);
-
-                    result = 0;
+                    // Compute grid size from the bounded copy so both are consistent
+                    mesh_grid = mesh_grid_size_from_csv(mesh_config);
+                    result = (mesh_grid > 0) ? 0 : 2;
                 } else if (b[0] == 'z' && b[1] == '_' && b[2] == 'o' && b[3] == 'f' && b[4] == 'f' &&
                           b[5] == 's' && b[6] == 'e' && b[7] == 't' && b[8] == ' ' && b[9] == ':' && b[10] == ' ') {
                     z_offset = atof(&b[11]);

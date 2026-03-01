@@ -46,10 +46,14 @@ function parseMeshString(meshString: string, gridSize: number): number[][] {
 }
 
 /**
- * Rounds a value to at most 6 decimal places, matching Klipper's config format.
+ * Rounds a value to 6 decimal places using half-away-from-zero (same as C's round()),
+ * matching Klipper's config format. Math.round() breaks ties toward +∞ for negatives,
+ * which differs from C's round() that rounds half away from zero for all values.
  */
 function round6(val: number): number {
-  return Math.round(val * 1e6) / 1e6
+  const scaled = val * 1e6
+  const rounded = scaled < 0 ? -Math.round(-scaled) : Math.round(scaled)
+  return rounded / 1e6
 }
 
 /**
