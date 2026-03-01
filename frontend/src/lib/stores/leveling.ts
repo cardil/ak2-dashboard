@@ -46,13 +46,23 @@ function parseMeshString(meshString: string, gridSize: number): number[][] {
 }
 
 /**
+ * Rounds a value to at most 6 decimal places, matching Klipper's config format.
+ */
+function round6(val: number): number {
+  return Math.round(val * 1e6) / 1e6
+}
+
+/**
  * Applies precision rounding to mesh data, matching the C backend's apply_precision function.
+ * Also clamps to 6 decimal places to avoid floating-point artifacts.
  */
 function applyPrecision(meshData: number[][], precision: number): void {
   if (precision === 0.0) return
   for (let i = 0; i < meshData.length; i++) {
     for (let j = 0; j < meshData[i].length; j++) {
-      meshData[i][j] = Math.round(meshData[i][j] / precision) * precision
+      meshData[i][j] = round6(
+        Math.round(meshData[i][j] / precision) * precision,
+      )
     }
   }
 }
@@ -87,10 +97,11 @@ function calculateAverageSlot(
   applyPrecision(avgData, precision)
 
   // Average z_offset only from slots that have it; undefined if none do
+  // Clamp to 6 decimal places to match Klipper's config format (e.g. -1.440000)
   const withZ = slots.filter((s) => s.zOffset !== undefined)
   const avgZOffset =
     withZ.length > 0
-      ? withZ.reduce((acc, s) => acc + s.zOffset!, 0) / withZ.length
+      ? round6(withZ.reduce((acc, s) => acc + s.zOffset!, 0) / withZ.length)
       : undefined
 
   return { id: "average", name: "Average", data: avgData, zOffset: avgZOffset }
