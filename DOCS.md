@@ -85,7 +85,7 @@ Slots store individual mesh measurements from each leveling pass. They are:
 
 Each slot is stored as a `.txt` file with up to two lines:
 
-```
+```text
 +0.081000, -0.022000, ...   ← line 1: mesh CSV data
 1.4430                      ← line 2: z_offset (optional)
 ```

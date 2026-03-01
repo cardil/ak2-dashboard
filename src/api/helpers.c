@@ -364,7 +364,7 @@ int read_slots_json(const char *slots_dir, char *buffer, int buffer_size, int *l
         if (z_offset_line[0] != '\0') {
           char *end;
           double z_offset_val = strtod(z_offset_line, &end);
-          if (end != z_offset_line) {
+          if (end != z_offset_line && *end == '\0') {
             *len += snprintf(buffer + *len, buffer_size - *len,
                             "{\"id\": %d, \"date\": \"%s\", \"mesh_data\": \"%s\", \"z_offset\": %.4f}",
                             i, date_buf, mesh_data, z_offset_val);

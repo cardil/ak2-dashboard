@@ -104,7 +104,15 @@ void handle_put_profile_printer_mesh(struct REQUEST *req, const char *profile_id
   if (update_printer_config_file(config_file, "points", mesh_data_buf) == 0) {
     // If z_offset provided, also update it in the config file (safety: only if provided)
     if (z_offset_buf[0] != '\0') {
-      update_printer_config_file(config_file, "z_offset", z_offset_buf);
+      if (update_printer_config_file(config_file, "z_offset", z_offset_buf) != 0) {
+        snprintf(req->response_buffer, sizeof(req->response_buffer),
+                "{\"status\": \"error\", \"message\": \"Mesh updated but failed to update z_offset.\"}");
+        req->body = req->response_buffer;
+        req->lbody = strlen(req->response_buffer);
+        req->mime = "application/json";
+        mkheader(req, 500);
+        return;
+      }
     }
     if (is_current) {
       snprintf(req->response_buffer, sizeof(req->response_buffer),
