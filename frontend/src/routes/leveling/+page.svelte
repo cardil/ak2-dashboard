@@ -330,8 +330,21 @@
     editingZOffsetValue = ""
   }
 
-  function formatZOffset(zOffset?: number): string {
-    return zOffset !== undefined ? `z: ${zOffset.toFixed(4)}mm` : "z: —"
+  function formatZOffset(zOffset?: number, precision?: number): string {
+    if (zOffset === undefined) return "z: —"
+    // Number of decimal places to round to (derived from precision step)
+    // e.g. 0.01 → 2, 0.005 → 3, 0.001 → 3
+    const decimals =
+      precision !== undefined && precision > 0
+        ? Math.max(0, -Math.floor(Math.log10(precision)))
+        : 4
+    // Round to nearest precision step
+    const rounded =
+      precision !== undefined && precision > 0
+        ? Math.round(zOffset / precision) * precision
+        : zOffset
+    // toFixed for rounding, then parseFloat strips trailing zeros
+    return `z: ${parseFloat(rounded.toFixed(decimals))}mm`
   }
 
   // Reactive label for mesh based on selection
@@ -470,7 +483,10 @@
                         $levelingStore.activeSlot?.zOffset,
                       )}
                   >
-                    {formatZOffset($levelingStore.activeSlot.zOffset)}
+                    {formatZOffset(
+                      $levelingStore.activeSlot.zOffset,
+                      $levelingStore.settings?.precision,
+                    )}
                     <FontAwesomeIcon icon={faPencilAlt} class="edit-icon" />
                   </button>
                 {/if}
@@ -509,7 +525,10 @@
                 </span>
                 <!-- Average z-offset is read-only -->
                 <span class="zoffset-label readonly">
-                  {formatZOffset($levelingStore.averageSlot.zOffset)}
+                  {formatZOffset(
+                    $levelingStore.averageSlot.zOffset,
+                    $levelingStore.settings?.precision,
+                  )}
                 </span>
                 <div class="button-group">
                   <button
@@ -572,7 +591,10 @@
                     typeof slot.id === "number" &&
                     startEditZOffset(slot.id, slot.zOffset)}
                 >
-                  {formatZOffset(slot.zOffset)}
+                  {formatZOffset(
+                    slot.zOffset,
+                    $levelingStore.settings?.precision,
+                  )}
                   <FontAwesomeIcon icon={faPencilAlt} class="edit-icon" />
                 </button>
               {/if}
