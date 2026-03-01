@@ -83,6 +83,30 @@ Slots store individual mesh measurements from each leveling pass. They are:
 - **Profile-specific** - Each profile (including Current) has its own isolated slots
 - **Numbered 1-99** - Automatically assigned or manually specified
 
+Each slot is stored as a `.txt` file with up to two lines:
+
+```
++0.081000, -0.022000, ...   ← line 1: mesh CSV data
+1.4430                      ← line 2: z_offset (optional)
+```
+
+Slots saved before z-offset support was added contain only line 1 (legacy format). These are fully supported — their z-offset shows as "—".
+
+### Z-offset per Slot
+
+Every slot row displays its z-offset value alongside the mesh data. This includes the active mesh, all saved slots, and the computed average.
+
+- **Inline editing** — Click the z-offset value on any slot row to edit it. Press Enter or click away to save. The active slot updates `printer.cfg` immediately; saved slots update the slot file.
+- **Average slot** — Z-offset is read-only and computed from all slots that have a z-offset. Legacy slots (no z-offset) are excluded from the average. If no slots have a z-offset the average shows "—".
+- **Legacy slots** — Display "z: —". You can add a z-offset by clicking the label and entering a value.
+
+### Safe Activation
+
+When activating a slot or average as the current mesh:
+
+- **Slot with z-offset** — Both mesh points and z-offset are written to `printer.cfg`.
+- **Slot without z-offset (legacy)** — Only mesh points are updated. The existing z-offset in `printer.cfg` is preserved, preventing accidental data loss.
+
 ## Profiles
 
 Profiles let you save and restore complete leveling configurations for different scenarios (build surfaces, materials, backups). They are dashboard-only features - the printer firmware doesn't know about them. They are snapshots you can restore later.
@@ -104,7 +128,7 @@ Profiles let you save and restore complete leveling configurations for different
 **What Profiles Store**
 - Grid size, bed temp, precision settings
 - Active mesh data
-- All saved slot measurements
+- All saved slot measurements, including z-offset per slot
 
 **Limitations**
 - Maximum 20 profiles, 99 slots per profile
@@ -326,6 +350,11 @@ To verify your configuration:
 - This is normal for stock firmware
 - Use the averaging system (5-6 slots minimum)
 - Check probe cleanliness
+
+**Legacy Slots Showing "z: —"**
+- Slots saved before z-offset support show "—" instead of a value
+- They were saved before this feature was introduced
+- To add a z-offset: click the "—" label on the slot row, enter the value, and press Enter
 
 **Grid Size Errors**
 - Increase grid by one point at a time
