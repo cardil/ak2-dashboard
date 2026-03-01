@@ -54,8 +54,17 @@ void handle_put_profile_printer_mesh(struct REQUEST *req, const char *profile_id
     return;
   }
 
-  char *mesh_data = get_json_value(req->req_body, "\"mesh_data\"");
-  if (!mesh_data) {
+  // Note: get_json_value() uses a static buffer, copy values before next call
+  char mesh_data_buf[4096] = {0};
+  char z_offset_buf[32] = {0};
+
+  char *mesh_data_val = get_json_value(req->req_body, "\"mesh_data\"");
+  if (mesh_data_val) strncpy(mesh_data_buf, mesh_data_val, sizeof(mesh_data_buf) - 1);
+
+  char *z_offset_val = get_json_value(req->req_body, "\"z_offset\"");
+  if (z_offset_val) strncpy(z_offset_buf, z_offset_val, sizeof(z_offset_buf) - 1);
+
+  if (mesh_data_buf[0] == '\0') {
     snprintf(req->response_buffer, sizeof(req->response_buffer),
             "{\"status\": \"error\", \"message\": \"Invalid JSON payload. Missing 'mesh_data'.\"}");
     req->body = req->response_buffer;
@@ -92,7 +101,19 @@ void handle_put_profile_printer_mesh(struct REQUEST *req, const char *profile_id
     config_file = profile_cfg;
   }
 
-  if (update_printer_config_file(config_file, "points", mesh_data) == 0) {
+  if (update_printer_config_file(config_file, "points", mesh_data_buf) == 0) {
+    // If z_offset provided, also update it in the config file (safety: only if provided)
+    if (z_offset_buf[0] != '\0') {
+      if (update_printer_config_file(config_file, "z_offset", z_offset_buf) != 0) {
+        snprintf(req->response_buffer, sizeof(req->response_buffer),
+                "{\"status\": \"error\", \"message\": \"Mesh updated but failed to update z_offset.\"}");
+        req->body = req->response_buffer;
+        req->lbody = strlen(req->response_buffer);
+        req->mime = "application/json";
+        mkheader(req, 500);
+        return;
+      }
+    }
     if (is_current) {
       snprintf(req->response_buffer, sizeof(req->response_buffer),
               "{\"status\": \"success\", \"message\": \"Active printer mesh updated. Please reboot for changes to take effect.\"}");
@@ -177,6 +198,13 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
   tmp = get_json_value(body_copy, "\"precision\"");
   if (tmp) strncpy(precision_buf, tmp, sizeof(precision_buf) - 1);
   char *precision_str = precision_buf[0] ? precision_buf : NULL;
+
+  // Get z_offset and copy to local buffer
+  strcpy(body_copy, req->req_body);
+  char z_offset_buf[32] = {0};
+  tmp = get_json_value(body_copy, "\"z_offset\"");
+  if (tmp) strncpy(z_offset_buf, tmp, sizeof(z_offset_buf) - 1);
+  char *z_offset_str = z_offset_buf[0] ? z_offset_buf : NULL;
 
   const char *config_file;
   const char *cfg_filename;
@@ -284,6 +312,19 @@ void handle_put_profile_settings(struct REQUEST *req, const char *profile_id_str
     leveling_config = set_key_value(leveling_config, "precision", precision_str);
     write_config_file(params_file, leveling_config);
     LOG( "Leveling precision set to %s in %s\n", precision_str, params_file);
+  }
+
+  if (z_offset_str) {
+    if (update_printer_config_file(config_file, "z_offset", z_offset_str) != 0) {
+      snprintf(req->response_buffer, sizeof(req->response_buffer),
+              "{\"status\": \"error\", \"message\": \"Failed to update z_offset.\"}");
+      req->body = req->response_buffer;
+      req->lbody = strlen(req->response_buffer);
+      req->mime = "application/json";
+      mkheader(req, 500);
+      return;
+    }
+    LOG( "z_offset set to %s\n", z_offset_str);
   }
 
   // Log settings update

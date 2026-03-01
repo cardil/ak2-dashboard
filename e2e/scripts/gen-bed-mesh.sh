@@ -1,8 +1,14 @@
 #!/bin/sh
-# Simulates bed mesh leveling by generating mesh points in printer.cfg
+# Simulates bed mesh leveling by generating mesh points and z-offset in printer.cfg
 # This mimics what the vendor app does when running bed leveling
 
 CONFIG_FILE="/user/printer.cfg"
+
+# Generate a realistic z-offset value in the range 1.25mm to 1.65mm
+# Uses awk for floating-point arithmetic (available in BusyBox)
+generate_z_offset() {
+    awk 'BEGIN { srand(); printf "%.4f\n", 1.25 + (rand() * 0.40) }'
+}
 
 # Get grid size from probe_count in config (e.g., "5,5" -> 5)
 get_grid_size() {
@@ -104,6 +110,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 MESH_POINTS=$(generate_mesh_points)
+Z_OFFSET=$(generate_z_offset)
 
 # Check if points line already exists
 if grep -q "^points : " "$CONFIG_FILE"; then
@@ -114,7 +121,15 @@ else
     sed -i "/^algorithm : /a points : $MESH_POINTS" "$CONFIG_FILE"
 fi
 
-# Verify the change
+# Update z_offset under [probe] in printer.cfg
+if grep -q "^z_offset : " "$CONFIG_FILE"; then
+    echo "Updating z_offset in printer.cfg..."
+    sed -i "s/^z_offset : .*/z_offset : $Z_OFFSET/" "$CONFIG_FILE"
+else
+    echo "z_offset line not found in printer.cfg, skipping update"
+fi
+
+# Verify the changes
 if grep -q "^points : " "$CONFIG_FILE"; then
     echo "SUCCESS: Mesh points generated!"
     grep "^points : " "$CONFIG_FILE"
@@ -122,3 +137,4 @@ else
     echo "ERROR: Failed to add mesh points"
     exit 1
 fi
+echo "Z-offset: $Z_OFFSET"

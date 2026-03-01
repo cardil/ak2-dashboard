@@ -17,12 +17,13 @@
     faFileMedical,
     faHdd,
     faUser,
+    faPencilAlt,
   } from "@fortawesome/free-solid-svg-icons"
   import { get, type Unsubscriber } from "svelte/store"
   import { onDestroy } from "svelte"
   import { levelingStore } from "$lib/stores/leveling"
   import { profilesStore } from "$lib/stores/profiles"
-  import type { MeshProfile } from "$lib/stores/leveling"
+  import type { Slot } from "$lib/stores/leveling"
   import Spinner from "$lib/components/Spinner.svelte"
   import InfoModal from "$lib/components/InfoModal.svelte"
   import { toast } from "svelte-sonner"
@@ -50,18 +51,26 @@
   let isSaveAsModalOpen = false
   let isProfileManagerModalOpen = false
 
-  $: if ($levelingStore.activeMesh) {
-    const activeDataString = JSON.stringify($levelingStore.activeMesh.data)
-    const foundSlot = $levelingStore.savedMeshes.find(
+  // z-offset inline editing state
+  let editingZOffsetSlotId: number | "active" | null = null
+  let editingZOffsetValue = ""
+
+  function focusOnMount(node: HTMLElement) {
+    node.focus()
+  }
+
+  $: if ($levelingStore.activeSlot) {
+    const activeDataString = JSON.stringify($levelingStore.activeSlot.data)
+    const foundSlot = $levelingStore.savedSlots.find(
       (s) => JSON.stringify(s.data) === activeDataString,
     )
     if (foundSlot) {
       activeSlotId = foundSlot.id
     } else {
-      const averageMesh = $levelingStore.averageMesh
+      const averageSlot = $levelingStore.averageSlot
       if (
-        averageMesh &&
-        JSON.stringify(averageMesh.data) === activeDataString
+        averageSlot &&
+        JSON.stringify(averageSlot.data) === activeDataString
       ) {
         activeSlotId = "average"
       } else {
@@ -84,45 +93,44 @@
     if (store.settings && !store.isUpdating) {
       localSettings = { ...store.settings }
     }
-    // Initialize visualized data with the active mesh from the store
-    if (store.activeMesh && visualizedSlotId === null) {
-      visualizedMeshData = store.activeMesh.data
+    // Initialize visualized data with the active slot from the store
+    if (store.activeSlot && visualizedSlotId === null) {
+      visualizedMeshData = store.activeSlot.data
       visualizedSlotId = "active"
     }
   })
   onDestroy(unsubLeveling)
 
-  // Reactive block to handle cases where the visualized mesh is deleted from the store
+  // Reactive block to handle cases where the visualized slot is deleted from the store
   $: if (
-    $levelingStore.activeMesh &&
+    $levelingStore.activeSlot &&
     visualizedSlotId &&
     visualizedSlotId !== "active" &&
     visualizedSlotId !== "average" &&
-    !$levelingStore.savedMeshes.find((s) => s.id === visualizedSlotId)
+    !$levelingStore.savedSlots.find((s) => s.id === visualizedSlotId)
   ) {
-    visualizeSlot($levelingStore.activeMesh)
+    visualizeSlot($levelingStore.activeSlot)
   }
 
-  // Ensure the visualizer updates when the active mesh data changes from the store
-  $: if (visualizedSlotId === "active" && $levelingStore.activeMesh) {
-    visualizedMeshData = $levelingStore.activeMesh.data
+  // Ensure the visualizer updates when the active slot data changes
+  $: if (visualizedSlotId === "active" && $levelingStore.activeSlot) {
+    visualizedMeshData = $levelingStore.activeSlot.data
   }
 
-  // Ensure the visualizer updates when the average mesh data changes from the store
-  $: if (visualizedSlotId === "average" && $levelingStore.averageMesh) {
-    visualizedMeshData = $levelingStore.averageMesh.data
+  // Ensure the visualizer updates when the average slot data changes
+  $: if (visualizedSlotId === "average" && $levelingStore.averageSlot) {
+    visualizedMeshData = $levelingStore.averageSlot.data
   }
 
   // --- UI Functions ---
 
   function enterEditMode() {
-    // Create a deep copy of the data for editing
     editedMeshData = JSON.parse(JSON.stringify(visualizedMeshData))
-    visualizedSlotId = null // Remove visualized state
+    visualizedSlotId = null
     isEditing = true
   }
 
-  function visualizeSlot(slot: MeshProfile) {
+  function visualizeSlot(slot: Slot) {
     if (slot) {
       if (isEditing) {
         if (
@@ -139,7 +147,7 @@
     }
   }
 
-  function activateSlot(slotToActivate: MeshProfile) {
+  function activateSlot(slotToActivate: Slot) {
     if (typeof slotToActivate.id === "number") {
       levelingStore.activateSlot(slotToActivate.id)
     } else if (slotToActivate.id === "average") {
@@ -150,8 +158,6 @@
   async function handleSaveSettings() {
     if (!$levelingStore.settings) return
 
-    // Only show grid size change warning for "current" profile (the one on the printer)
-    // Saved profiles can be edited without requiring a reboot
     if (
       $profilesStore.selectedProfile === "current" &&
       localSettings.gridSize !== $levelingStore.settings.gridSize
@@ -181,7 +187,6 @@
     try {
       const response = await levelingStore.saveSettings(localSettings)
       modalState = "closed"
-      // Only show reboot required dialog for "current" profile
       if (
         response.grid_size_changed &&
         $profilesStore.selectedProfile === "current"
@@ -210,7 +215,6 @@
       const response = await fetch("/api/system/reboot", { method: "POST" })
       if (response.ok) {
         toast.success("Printer is rebooting...")
-        // Close the modal
         modalState = "closed"
       } else {
         throw new Error("Reboot request failed")
@@ -230,20 +234,20 @@
         await levelingStore.saveEditedMesh(slotId, editedMeshData)
         isEditing = false
         toast.success(`Mesh saved to slot ${slotId}`)
-        const savedMesh = get(levelingStore).savedMeshes.find(
+        const savedSlot = get(levelingStore).savedSlots.find(
           (s) => s.id === slotId,
         )
-        if (savedMesh) {
-          visualizeSlot(savedMesh)
+        if (savedSlot) {
+          visualizeSlot(savedSlot)
         }
       } else {
         await levelingStore.saveActiveMesh(slotId)
         toast.success(`Active mesh saved to slot ${slotId}`)
-        const savedMesh = get(levelingStore).savedMeshes.find(
+        const savedSlot = get(levelingStore).savedSlots.find(
           (s) => s.id === slotId,
         )
-        if (savedMesh) {
-          visualizeSlot(savedMesh)
+        if (savedSlot) {
+          visualizeSlot(savedSlot)
         }
       }
     } catch (error) {
@@ -276,7 +280,6 @@
       await profilesStore.saveAs(sourceId, target, name)
 
       if (target === "current") {
-        // Show reboot modal when profile is applied to current
         modalInfo = {
           title: "Reboot Required",
           message:
@@ -294,16 +297,61 @@
         toast.success("Profile saved successfully")
       }
 
-      // Refetch leveling data if we're still on the same profile
       await levelingStore.fetchData()
     } catch (e: any) {
       toast.error(e.message || "Failed to save profile")
     }
   }
 
+  // --- z-offset inline editing ---
+
+  function startEditZOffset(slotId: number | "active", currentValue?: number) {
+    editingZOffsetSlotId = slotId
+    editingZOffsetValue = currentValue !== undefined ? String(currentValue) : ""
+  }
+
+  async function commitZOffset() {
+    if (editingZOffsetSlotId === null) return
+    const parsed = parseFloat(editingZOffsetValue)
+    if (!isNaN(parsed)) {
+      try {
+        await levelingStore.updateZOffset(editingZOffsetSlotId, parsed)
+        toast.success("Z-offset updated")
+      } catch {
+        toast.error("Failed to update z-offset")
+      }
+    }
+    editingZOffsetSlotId = null
+    editingZOffsetValue = ""
+  }
+
+  function cancelEditZOffset() {
+    editingZOffsetSlotId = null
+    editingZOffsetValue = ""
+  }
+
+  function formatZOffset(zOffset?: number, precision?: number): string {
+    if (zOffset === undefined) return "z: —"
+    // Number of decimal places to round to (derived from precision step)
+    // e.g. 0.01 → 2, 0.005 → 3, 0.001 → 3
+    const decimals =
+      precision !== undefined && precision > 0
+        ? Math.max(0, -Math.floor(Math.log10(precision)))
+        : 4
+    // Round to nearest precision step
+    const rounded =
+      precision !== undefined && precision > 0
+        ? Math.round(zOffset / precision) * precision
+        : zOffset
+    // toFixed for rounding, then parseFloat strips trailing zeros
+    return `z: ${parseFloat(rounded.toFixed(decimals))}mm`
+  }
+
   // Reactive label for mesh based on selection
   $: meshLabel =
-    $profilesStore.selectedProfile === "current" ? "Active Mesh" : "Saved Mesh"
+    $profilesStore.selectedProfile === "current"
+      ? "Active Mesh"
+      : "Profile Mesh"
 
   // Watch for profile changes and refetch data
   $: if ($profilesStore.selectedProfile) {
@@ -405,15 +453,43 @@
             <h3 class="card-title"><FontAwesomeIcon icon={faTh} /> Bed Mesh</h3>
           </svelte:fragment>
           <div class="mesh-list">
-            {#if $levelingStore.activeMesh}
+            {#if $levelingStore.activeSlot}
               <div
                 class="mesh-item"
                 class:active={visualizedSlotId === "active"}
               >
-                <span
-                  >{meshLabel} (Z-Offset: {$levelingStore.activeMesh
-                    .zOffset})</span
-                >
+                <span>{meshLabel}</span>
+                <!-- z-offset display / inline edit for active slot -->
+                {#if editingZOffsetSlotId === "active"}
+                  <input
+                    class="zoffset-input"
+                    type="number"
+                    step="0.0001"
+                    bind:value={editingZOffsetValue}
+                    on:keydown={(e) => {
+                      if (e.key === "Enter") commitZOffset()
+                      if (e.key === "Escape") cancelEditZOffset()
+                    }}
+                    on:blur={commitZOffset}
+                    use:focusOnMount
+                  />
+                {:else}
+                  <button
+                    class="zoffset-label"
+                    title="Click to edit z-offset"
+                    on:click={() =>
+                      startEditZOffset(
+                        "active",
+                        $levelingStore.activeSlot?.zOffset,
+                      )}
+                  >
+                    {formatZOffset(
+                      $levelingStore.activeSlot.zOffset,
+                      $levelingStore.settings?.precision,
+                    )}
+                    <FontAwesomeIcon icon={faPencilAlt} class="edit-icon" />
+                  </button>
+                {/if}
                 <div class="button-group">
                   <button
                     class="small primary"
@@ -424,8 +500,8 @@
                   <button
                     class="small"
                     on:click={() =>
-                      $levelingStore.activeMesh &&
-                      visualizeSlot($levelingStore.activeMesh)}
+                      $levelingStore.activeSlot &&
+                      visualizeSlot($levelingStore.activeSlot)}
                     disabled={visualizedSlotId === "active"}
                   >
                     <FontAwesomeIcon icon={faEye} />
@@ -436,7 +512,7 @@
             {/if}
 
             <!-- Average Mesh Special Slot -->
-            {#if $levelingStore.averageMesh}
+            {#if $levelingStore.averageSlot}
               <div
                 class="mesh-item"
                 class:active={visualizedSlotId === "average"}
@@ -446,6 +522,13 @@
                   {#if activeSlotId === "average"}
                     <span class="active-label">active</span>
                   {/if}
+                </span>
+                <!-- Average z-offset is read-only -->
+                <span class="zoffset-label readonly">
+                  {formatZOffset(
+                    $levelingStore.averageSlot.zOffset,
+                    $levelingStore.settings?.precision,
+                  )}
                 </span>
                 <div class="button-group">
                   <button
@@ -457,8 +540,8 @@
                   <button
                     class="small"
                     on:click={() =>
-                      $levelingStore.averageMesh &&
-                      visualizeSlot($levelingStore.averageMesh)}
+                      $levelingStore.averageSlot &&
+                      visualizeSlot($levelingStore.averageSlot)}
                     disabled={visualizedSlotId === "average"}
                     ><FontAwesomeIcon icon={faEye} />
                     Visualize
@@ -478,7 +561,7 @@
           </h3>
         </svelte:fragment>
         <div class="mesh-list">
-          {#each $levelingStore.savedMeshes as slot (slot.id)}
+          {#each $levelingStore.savedSlots as slot (slot.id)}
             <div class="mesh-item" class:active={slot.id === visualizedSlotId}>
               <span class="slot-name">
                 {slot.name}
@@ -486,6 +569,35 @@
                   <span class="active-label">active</span>
                 {/if}
               </span>
+              <!-- z-offset inline edit for saved slots -->
+              {#if editingZOffsetSlotId === slot.id}
+                <input
+                  class="zoffset-input"
+                  type="number"
+                  step="0.0001"
+                  bind:value={editingZOffsetValue}
+                  on:keydown={(e) => {
+                    if (e.key === "Enter") commitZOffset()
+                    if (e.key === "Escape") cancelEditZOffset()
+                  }}
+                  on:blur={commitZOffset}
+                  use:focusOnMount
+                />
+              {:else}
+                <button
+                  class="zoffset-label"
+                  title="Click to edit z-offset"
+                  on:click={() =>
+                    typeof slot.id === "number" &&
+                    startEditZOffset(slot.id, slot.zOffset)}
+                >
+                  {formatZOffset(
+                    slot.zOffset,
+                    $levelingStore.settings?.precision,
+                  )}
+                  <FontAwesomeIcon icon={faPencilAlt} class="edit-icon" />
+                </button>
+              {/if}
               <div class="button-group">
                 <button
                   class="small"
@@ -651,7 +763,6 @@
     align-items: flex-end;
   }
   .settings-form .button-group {
-    /* This allows the button to align nicely with the inputs */
     padding-bottom: 0;
   }
 
@@ -722,18 +833,25 @@
   }
 
   .mesh-item {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
     align-items: center;
     padding: 0.5rem;
     border-radius: 5px;
     background-color: var(--background-color);
     border: 1px solid transparent;
     transition: all 0.2s;
+    column-gap: 0.5rem;
+    row-gap: 0.15rem;
   }
   .mesh-item.active {
     border-color: var(--accent-color);
     background-color: var(--card-background-color);
+  }
+  .mesh-item .button-group {
+    grid-column: 2;
+    grid-row: 1 / span 2;
   }
 
   .active-label {
@@ -750,6 +868,38 @@
   .slot-name {
     display: flex;
     align-items: center;
+  }
+
+  .zoffset-label {
+    font-size: 0.75em;
+    color: var(--text-muted-color, #888);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-weight: normal;
+    text-align: left;
+    justify-self: start;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .zoffset-label.readonly {
+    cursor: default;
+  }
+  .zoffset-label :global(.edit-icon) {
+    opacity: 0.4;
+    font-size: 0.85em;
+  }
+  .zoffset-label:hover :global(.edit-icon) {
+    opacity: 1;
+  }
+
+  .zoffset-input {
+    width: 8rem;
+    font-size: 0.8em;
+    padding: 0.15rem 0.3rem;
+    justify-self: start;
   }
 
   @media (max-width: 900px) {

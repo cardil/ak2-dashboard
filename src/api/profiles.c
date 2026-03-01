@@ -128,14 +128,14 @@ void handle_get_profile(struct REQUEST *req, const char *profile_id_str) {
           "\"settings\": {"
           "\"grid_size\": %d,"
           "\"bed_temp\": %d,"
-          "\"precision\": %.4f,"
+          "\"precision\": %.4f"
+          "},"
+          "\"active_slot\": {"
+          "\"mesh_data\": \"%s\","
           "\"z_offset\": %.4f"
           "},"
-          "\"active_mesh\": {"
-          "\"mesh_data\": \"%s\""
-          "},"
-          "\"saved_meshes\": [",
-          mesh_grid, bed_temp, precision, z_offset, mesh_config);
+          "\"saved_slots\": [",
+          mesh_grid, bed_temp, precision, mesh_config, z_offset);
 
   // Read slots
   const char *slots_dir = is_current ? "/user/webfs" : NULL;

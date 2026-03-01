@@ -139,7 +139,7 @@ test.describe('Leveling Page - Slot Operations', () => {
       const slotNumber = Math.floor(Math.random() * 90) + 10; // Random slot 10-99
 
       // Open save modal
-      const activeMeshSection = page.locator('text=Active Mesh').locator('..');
+      const activeMeshSection = page.locator('.mesh-item').filter({ hasText: 'Active Mesh' });
       await activeMeshSection.getByRole('button', { name: 'Save' }).click();
 
       const dialog = page.getByRole('dialog');
@@ -160,7 +160,7 @@ test.describe('Leveling Page - Slot Operations', () => {
 
     test('should save mesh, generate new mesh, save second slot', async ({ page }) => {
       // Save first mesh to slot 1
-      const activeMeshSection = page.locator('text=Active Mesh').locator('..');
+      const activeMeshSection = page.locator('.mesh-item').filter({ hasText: 'Active Mesh' });
       await activeMeshSection.getByRole('button', { name: 'Save' }).click();
       
       let dialog = page.getByRole('dialog');
@@ -177,7 +177,7 @@ test.describe('Leveling Page - Slot Operations', () => {
       await page.waitForSelector('text=Profile');
 
       // Save second mesh to slot 2
-      const activeMeshSection2 = page.locator('text=Active Mesh').locator('..');
+      const activeMeshSection2 = page.locator('.mesh-item').filter({ hasText: 'Active Mesh' });
       await activeMeshSection2.getByRole('button', { name: 'Save' }).click();
       
       dialog = page.getByRole('dialog');
@@ -204,7 +204,7 @@ test.describe('Leveling Page - Slot Operations', () => {
       // Create a slot (99) to ensure we have one to delete
       const slotNumber = 99;
 
-      const activeMeshSection = page.locator('text=Active Mesh').locator('..');
+      const activeMeshSection = page.locator('.mesh-item').filter({ hasText: 'Active Mesh' });
       await activeMeshSection.getByRole('button', { name: 'Save' }).click();
       
       const dialog = page.getByRole('dialog');
@@ -372,5 +372,50 @@ test.describe('Leveling Page - Settings', () => {
     await dropdown.selectOption('1');
     const backupBedTempAfterSwitch = settingsForm.locator('input[type="number"]').nth(1);
     await expect(backupBedTempAfterSwitch).toHaveValue(backupBedTemp, { timeout: UI_TRANSITION_TIMEOUT + EXPECT_TIMEOUT });
+  });
+});
+
+test.describe('Leveling Page - Z-offset', () => {
+  test.beforeEach(async ({ page }) => {
+    await generateBedMesh();
+    await page.goto('/leveling');
+    await page.waitForSelector('text=Profile');
+  });
+
+  test('should show z-offset labels and allow inline editing on a saved slot', async ({ page }) => {
+    // Save a slot (reuses slot 77 to avoid clashing with existing tests)
+    const slotNumber = 77;
+    const activeMeshSection = page.locator('.mesh-item').filter({ hasText: 'Active Mesh' });
+    await activeMeshSection.getByRole('button', { name: 'Save' }).click();
+    let dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible({ timeout: EXPECT_TIMEOUT });
+    await dialog.getByRole('spinbutton', { name: /Slot Number/i }).fill(String(slotNumber));
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(page.locator(`text=saved to slot ${slotNumber}`)).toBeVisible({ timeout: EXPECT_TIMEOUT });
+
+    // The saved slot row should have a z-offset label (button for editing)
+    const slotRow = page.locator(`.slot-name:has-text("Slot ${slotNumber}")`).locator('..');
+    const zOffsetLabel = slotRow.locator('.zoffset-label').first();
+    await expect(zOffsetLabel).toBeVisible({ timeout: EXPECT_TIMEOUT });
+
+    // Click to enter inline edit mode
+    await zOffsetLabel.click();
+    const zInput = slotRow.locator('.zoffset-input');
+    await expect(zInput).toBeVisible({ timeout: EXPECT_TIMEOUT });
+
+    // Enter new z-offset and confirm with Enter
+    await zInput.fill('1.2500');
+    await zInput.press('Enter');
+
+    // Input closes and label updates
+    await expect(slotRow.locator('.zoffset-input')).not.toBeVisible({ timeout: EXPECT_TIMEOUT });
+    await expect(slotRow.locator('.zoffset-label').first()).toContainText('1.25', { timeout: EXPECT_TIMEOUT });
+
+    // Average slot z-offset should now show a value (not legacy dash)
+    const averageRow = page.locator('text=Average').locator('..');
+    const avgZOffset = averageRow.locator('.zoffset-label.readonly');
+    await expect(avgZOffset).toBeVisible({ timeout: EXPECT_TIMEOUT });
+    const avgText = await avgZOffset.textContent();
+    expect(avgText).not.toContain('—');
   });
 });

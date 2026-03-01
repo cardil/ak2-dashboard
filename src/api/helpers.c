@@ -346,16 +346,38 @@ int read_slots_json(const char *slots_dir, char *buffer, int buffer_size, int *l
           *len += snprintf(buffer + *len, buffer_size - *len, ",");
         }
         char mesh_data[4096] = {0};
-        fread(mesh_data, 1, sizeof(mesh_data) - 1, file);
+        char z_offset_line[64] = {0};
+        // Line 1: mesh CSV
+        if (fgets(mesh_data, sizeof(mesh_data) - 1, file) != NULL) {
+          trim_trailing_whitespace(mesh_data);
+        }
+        // Line 2: optional z_offset
+        if (fgets(z_offset_line, sizeof(z_offset_line) - 1, file) != NULL) {
+          trim_trailing_whitespace(z_offset_line);
+        }
         fclose(file);
-        trim_trailing_whitespace(mesh_data);
 
         char date_buf[32];
         strftime(date_buf, sizeof(date_buf), "%Y-%m-%d %H:%M:%S", localtime(&st.st_mtime));
 
-        *len += snprintf(buffer + *len, buffer_size - *len,
-                        "{\"id\": %d, \"date\": \"%s\", \"mesh_data\": \"%s\"}",
-                        i, date_buf, mesh_data);
+        // Include z_offset if line 2 was present and is a valid float
+        if (z_offset_line[0] != '\0') {
+          char *end;
+          double z_offset_val = strtod(z_offset_line, &end);
+          if (end != z_offset_line && *end == '\0') {
+            *len += snprintf(buffer + *len, buffer_size - *len,
+                            "{\"id\": %d, \"date\": \"%s\", \"mesh_data\": \"%s\", \"z_offset\": %.4f}",
+                            i, date_buf, mesh_data, z_offset_val);
+          } else {
+            *len += snprintf(buffer + *len, buffer_size - *len,
+                            "{\"id\": %d, \"date\": \"%s\", \"mesh_data\": \"%s\"}",
+                            i, date_buf, mesh_data);
+          }
+        } else {
+          *len += snprintf(buffer + *len, buffer_size - *len,
+                          "{\"id\": %d, \"date\": \"%s\", \"mesh_data\": \"%s\"}",
+                          i, date_buf, mesh_data);
+        }
         first_mesh = 0;
       }
     }

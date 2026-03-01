@@ -446,22 +446,11 @@ int probe_count_y = 0;
 // last detected x_count & y_count, 0-unknown
 int x_count = 0;
 int y_count = 0;
-// web page grid size
-int new_grid_size = 0;
 // bed temperature
 int bed_temp = 60;
-// used profile number
-int used_profile = 1;
-int saved_profile = 1;
 
-// the number of mesh accumulation in mesh_acc[]
-int mesh_accumulations = 0;
-// mesh accumulator
-double mesh_acc[MESH_MATRIX_ELEMENTS];
 // mesh values (current bed leveling mesh)
 double mesh_values[MESH_MATRIX_ELEMENTS];
-// mesh average (calculated mesh average) or temp values during the average calculation
-double mesh_average[MESH_MATRIX_ELEMENTS];
 // selected average precision from the config file
 double precision = 0.01;
 // set Z-offset in the printer*.cfg file
@@ -484,41 +473,7 @@ void mesh_clear(double *mesh) {
         mesh[i] = 0.0;
 }
 
-// clear the mesh accumulator
-void mesh_acc_clear(void) {
-    mesh_clear(mesh_acc);
-    mesh_accumulations = 0;
-}
-
-// mesh_acc[] += mesh_values[] or mesh_acc[] += mesh_average[]
-// mesh_accumulations++
-void mesh_acc_add(double *value) {
-    int i;
-    for (i = 0; i < MESH_MATRIX_ELEMENTS; i++)
-        mesh_acc[i] += value[i];
-    mesh_accumulations++;
-}
-
-// mesh_average[] = mesh_acc[] / mesh_accumulations
-void mesh_acc_average(void) {
-    int i;
-    if (mesh_accumulations) {
-        if (mesh_accumulations == 1) {
-            // mesh_accumulations==1
-            for (i = 0; i < MESH_MATRIX_ELEMENTS; i++)
-                mesh_average[i] = mesh_acc[i];
-        } else {
-            // mesh_accumulations>=2
-            for (i = 0; i < MESH_MATRIX_ELEMENTS; i++)
-                mesh_average[i] = mesh_acc[i] / mesh_accumulations;
-        }
-    } else {
-        // mesh_accumulations==0
-        mesh_clear(mesh_average);
-    }
-}
-
-// convert mesh_values[grid x grid] or mesh_average[grid x grid] to mesh_matrix[grid x grid]
+// convert mesh_values[grid x grid] to mesh_matrix[grid x grid]
 // used format "%+1.4f"
 void mesh_matrix_export(double *mesh, int grid) {
     int x, y, i, ii;
@@ -544,57 +499,7 @@ void mesh_matrix_export(double *mesh, int grid) {
     }
 }
 
-// export mesh_average[] to buffer[] for printer.cfg setup
-void mesh_average_export(int grid, char *buffer) {
-    int x, y, i, ii;
-    i = 0;
-    ii = 0;
-    for (y = 0; y < grid; y++) {
-        for (x = 0; x < grid; x++) {
-            if ((x == (grid - 1)) && (y == (grid - 1))) {
-                // last point
-                sprintf(&buffer[ii], " %+1.6f", mesh_average[i]);
-                ii += 10;
-                buffer[ii] = 0;
-            } else {
-                if ((x == 0) && (y == 0)) {
-                    // first point
-                    sprintf(&buffer[ii], "%+1.6f,", mesh_average[i]);
-                    ii += 10;
-                    buffer[ii] = 0;
-                } else {
-                    // any other point
-                    sprintf(&buffer[ii], " %+1.6f,", mesh_average[i]);
-                    ii += 11;
-                    buffer[ii] = 0;
-                }
-            }
-            i++;
-        }
-    }
-}
-
-// return the number of the next available data slot (1-MAX_DATA_SLOTS)
-// or 0 if all slots are used
-int next_free_data_slot(void) {
-    int i;
-    char fn_buf[64];
-    int next = 0;
-    FILE *file;
-    for (i = 1; i < MAX_DATA_SLOTS; i++) {
-        sprintf(fn_buf, "/user/webfs/data_slot_%d.txt", i);
-        file = fopen(fn_buf, "r");
-        if (!file) {
-            next = i;
-            break;
-        } else {
-            fclose(file);
-        }
-    }
-    return next;
-}
-
-// parse the mesh values from config file string to mesh_values[] or mesh_average[]
+// parse the mesh values from config file string to mesh_values[]
 // return the number of parsed elements (not the grid size!)
 int parse_mesh_values(char *buffer, double *mesh) {
     int i;
@@ -613,64 +518,6 @@ int parse_mesh_values(char *buffer, double *mesh) {
         }
     }
     return nn;
-}
-
-// calculate mesh average for all used data slots
-// return the number of detected data slots
-// accumulate only data slots with provided grid_size
-// mesh_values[] = mesh_acc[all used data slots] / mesh_accumulations
-int calculate_mesh_average(int grid_size) {
-    int i, n, elements;
-    char fn_buf[64];
-    FILE *file;
-
-    mesh_acc_clear();
-
-    elements = grid_size * grid_size;
-
-    for (i = 1; i < MAX_DATA_SLOTS; i++) {
-        sprintf(fn_buf, "/user/webfs/data_slot_%d.txt", i);
-        file = fopen(fn_buf, "r");
-        if (file) {
-            fread(mesh_config, 1, MESH_BUFFER_SIZE, file);
-            fclose(file);
-            n = parse_mesh_values(mesh_config, mesh_average);
-            if (n == elements) {
-                mesh_acc_add(mesh_average);
-            }
-        }
-    }
-    mesh_acc_average();
-
-    return mesh_accumulations;
-}
-
-int export_selected_slot(int slot) {
-    int n, nn;
-    char fn_buf[64];
-    FILE *file;
-
-    n = 0;
-    sprintf(fn_buf, "/user/webfs/data_slot_%d.txt", slot);
-    file = fopen(fn_buf, "r");
-    if (file) {
-        fread(mesh_config, 1, MESH_BUFFER_SIZE, file);
-        fclose(file);
-        nn = parse_mesh_values(mesh_config, mesh_values);
-        n = GRID[nn & 0xFF];
-        mesh_matrix_export(mesh_values, n);
-    }
-    return n;
-}
-
-// apply provided precision to the provided buffer
-// buffer = mesh_values, precision=0.01
-void apply_precision(double *mesh, double precision) {
-    int i;
-    if (precision != 0.0) {
-        for (i = 0; i < MESH_MATRIX_ELEMENTS; i++)
-            mesh[i] = round(mesh[i] / precision) * precision;
-    }
 }
 
 // results:
@@ -767,11 +614,7 @@ int read_mesh_from_printer_config(void) {
     return read_mesh_from_config_file(k2_cfg);
 }
 
-char static_template_buffer[1024];
-char *static_template_ptr;
 config_option_t leveling_config = NULL;
-int error_code;
-int response_code;
 
 int get_ssh_status(void) {
     int ssh_status = 0;  // not installed
@@ -882,294 +725,6 @@ void get_memory_info(U64 *total_mem, U64 *free_mem) {
 }
 
 
-
-char *leveling_template_callback(char key) {
-    // response code replacement
-    if (key == '@') {
-        if (response_code == 1) {
-            static_template_ptr = "SUCCESS: The printer is preparing to reboot now ...";
-            return static_template_ptr;
-        }
-        if (response_code == 2) {
-            static_template_ptr = "SUCCESS: All data slots have been cleared!";
-            return static_template_ptr;
-        }
-        if (response_code == 3) {
-            static_template_ptr = "SUCCESS: Selected data slot has been cleared!";
-            return static_template_ptr;
-        }
-        if (response_code == 4) {
-            static_template_ptr = "SUCCESS: Current mesh has been saved in the selected data slot!";
-            return static_template_ptr;
-        }
-        if (response_code == 5) {
-            static_template_ptr = "SUCCESS: Calculated mesh average was set. Please reboot the printer to activate it!";
-            return static_template_ptr;
-        }
-        if (response_code == 6) {
-            static_template_ptr = "SUCCESS: Selected new arithmetic precision has been set!";
-            return static_template_ptr;
-        }
-        if (response_code == 7) {
-            return system_buffer;
-        }
-        if (response_code == 8) {
-            static_template_ptr = "SUCCESS: The requested command has been executed!";
-            return static_template_ptr;
-        }
-        if (response_code == 9) {
-            sprintf(static_template_buffer, "SUCCESS: Current printer configuration has been saved as a profile number %d.", saved_profile);
-            return static_template_buffer;
-        }
-        if (response_code == 10) {
-            sprintf(static_template_buffer, "SUCCESS: Profile %d is set to be used. Please reboot the printer!", saved_profile);
-            return static_template_buffer;
-        }
-        if (response_code == 11) {
-            sprintf(static_template_buffer, "SUCCESS: Selected bed mesh temperature %d C has been set!", bed_temp);
-            return static_template_buffer;
-        }
-        if (response_code == 12) {
-            static_template_ptr = "SUCCESS: The printer is preparing to power off ...";
-            return static_template_ptr;
-        }
-
-        // default - no response shown
-        static_template_buffer[0] = 0;
-        return static_template_buffer;
-    }
-    // error code replacement
-    if (key == '#') {
-        if (error_code == 1) {
-            static_template_ptr = "ERROR: No more free data slots are available!";
-            return static_template_ptr;
-        }
-        if (error_code == 2) {
-            static_template_ptr = "ERROR: Missing printer configuration file! Try to upload it from a backup.";
-            return static_template_ptr;
-        }
-        if (error_code == 3) {
-            static_template_ptr = "WARNING: No mesh data available in the config file! Please level the bed first!";
-            return static_template_ptr;
-        }
-        if (error_code == 4) {
-            static_template_ptr = "ERROR: Square grid is supported only! Select a new grid size and level the bed!";
-            return static_template_ptr;
-        }
-        if (error_code == 5) {
-            static_template_ptr = "ERROR: Probe grid size and bed mesh size do not match! Level the bed or select a new grid size!";
-            return static_template_ptr;
-        }
-        if (error_code == 6) {
-            static_template_ptr = "WARNING: The grid size has changed! Please reboot the printer and then level the bed.";
-            return static_template_ptr;
-        }
-        if (error_code == 7) {
-            static_template_ptr = "WARNING: The printer config file has changed! Please reboot the printer for the changes to be accepted.";
-            return static_template_ptr;
-        }
-        if (error_code == 8) {
-            static_template_ptr = "ERROR: The average cannot be used with all data slot cleared. Please save current mesh in a data slot first!";
-            return static_template_ptr;
-        }
-        if (error_code == 9) {
-            static_template_ptr = "ERROR: Selected data slot is out of the supported range!";
-            return static_template_ptr;
-        }
-        if (error_code == 10) {
-            static_template_ptr = "ERROR: Unsupported grid size!";
-            return static_template_ptr;
-        }
-        if (error_code == 11) {
-            static_template_ptr = "ERROR: Unsupported arithmetic precision!";
-            return static_template_ptr;
-        }
-        if (error_code == 12) {
-            static_template_ptr = "WARNING: No change detected in the requested parameters. These values are already set!";
-            return static_template_ptr;
-        }
-        if (error_code == 13) {
-            static_template_ptr = "ERROR: SSH service is not installed!";
-            return static_template_ptr;
-        }
-        if (error_code == 14) {
-            static_template_ptr = "ERROR: Invalid profile number!";
-            return static_template_ptr;
-        }
-        if (error_code == 15) {
-            static_template_ptr = "ERROR: Unable to detect the printer configuration!";
-            return static_template_ptr;
-        }
-        if (error_code == 16) {
-            static_template_ptr = "ERROR: Selected profile is already the current used profile!";
-            return static_template_ptr;
-        }
-        if (error_code == 17) {
-            static_template_ptr = "ERROR: Cannot save this profile!";
-            return static_template_ptr;
-        }
-        if (error_code == 18) {
-            static_template_ptr = "ERROR: Cannot read this profile!";
-            return static_template_ptr;
-        }
-        if (error_code == 19) {
-            static_template_ptr = "ERROR: Cannot use this profile!";
-            return static_template_ptr;
-        }
-        if (error_code == 20) {
-            static_template_ptr = "ERROR: Unsupported bed temperature!";
-            return static_template_ptr;
-        }
-        if (error_code == 99) {
-            static_template_ptr = "ERROR: Unsupported function requested!";
-            return static_template_ptr;
-        }
-        // default - no error shown
-        static_template_buffer[0] = 0;
-        return static_template_buffer;
-    }
-    if (key == 'E') {
-        // ---current mesh data---
-        return mesh_matrix;
-    }
-    if (key == 'F') {
-        // ---average mesh data---
-        apply_precision(mesh_average, precision);
-        mesh_matrix_export(mesh_average, mesh_grid);
-        return mesh_matrix;
-    }
-    if (key == 'A') {
-        // precision
-        char *precision_str = get_key_value(leveling_config, "precision", "0.01");
-        double precision = atof(precision_str);
-        sprintf(static_template_buffer, "%g", precision);
-        return static_template_buffer;
-    }
-    if (key == 'H') {
-        // used profile
-        char *profile_str = get_key_value(leveling_config, "used_profile", "1");
-        used_profile = atoi(profile_str);
-        if ((used_profile < 1) || (used_profile > 9))
-            used_profile = 1;
-        sprintf(static_template_buffer, "%d", used_profile);
-        return static_template_buffer;
-    }
-    if (key == 'Z') {
-        // Z-offset
-        sprintf(static_template_buffer, " Z-offset: %+g mm, Grid size used: %d, Grid size next: %d ", z_offset, mesh_grid, probe_count_x);
-        return static_template_buffer;
-    }
-    if (key == 'B') {
-        // grid size
-        if (new_grid_size != 0) {
-            // new grid size was set
-            sprintf(static_template_buffer, "%d", new_grid_size);
-        } else {
-            if (mesh_grid != 0) {
-                // current leveling grid size exists
-                sprintf(static_template_buffer, "%d", mesh_grid);
-            } else {
-                // next leveling grid size
-                sprintf(static_template_buffer, "%d", probe_count_x);
-            }
-        }
-        return static_template_buffer;
-    }
-    if (key == 'C') {
-        // next free slot
-        int next_free = next_free_data_slot();
-        sprintf(static_template_buffer, "%d", next_free);
-        return static_template_buffer;
-    }
-    if (key == 'X') {
-        // the number of slots to average
-        calculate_mesh_average(mesh_grid);
-        sprintf(static_template_buffer, "%d", mesh_accumulations);
-        return static_template_buffer;
-    }
-    if (key == 'T') {
-        // current bed mesh temperature
-        sprintf(static_template_buffer, "%d", bed_temp);
-        return static_template_buffer;
-    }
-    if (key == 'D') {
-        // slot to clear
-        static_template_buffer[0] = 0;
-        return static_template_buffer;
-    }
-    // default - empty string
-    static_template_buffer[0] = 0;
-    return static_template_buffer;
-}
-
-// convert a template to a result file in the help of template_element callback function
-// "{x}" is the template element "x", one char that will be expanded to the returned string
-// NOTE: just one template key per line is allowed!
-int populate_template_file(const char *src_file, const char *dst_file, char *(*template_element)(char key)) {
-    FILE *ifile;
-    FILE *ofile;
-    char *b = NULL;
-    size_t len = 0;
-    ssize_t read;
-    int i, n;
-    char key;
-    int key_beg;
-    int key_expanded_size;
-    char *key_expanded_value;
-
-    ifile = fopen(src_file, "r");
-    if (ifile) {
-        ofile = fopen(dst_file, "w");
-        if (ofile) {
-            while (1) {
-                read = getline(&b, &len, ifile);
-                if (read == -1) {
-                    break;
-                }
-                // line size
-                n = strlen(b);
-                if (n == 0)
-                    continue;
-
-                // line processing...
-                key_beg = -1;
-                for (i = 0; i < n; i++) {
-                    if ((b[i] == '{') && (b[i + 2] == '}')) {
-                        key_beg = i;
-                        key = b[i + 1];
-                        break;
-                    }
-                }
-                if (key_beg == -1) {
-                    // no template key found in this line, copy the line to the output
-                    fwrite(b, 1, n, ofile);
-                } else {
-                    // template key was found, so expand the key
-                    if (key_beg > 0) {
-                        // constant prefix found
-                        fwrite(b, 1, key_beg, ofile);
-                    }
-                    key_expanded_value = template_element(key);
-                    key_expanded_size = strlen(key_expanded_value);
-                    fwrite(key_expanded_value, 1, key_expanded_size, ofile);
-                    if (n > (key_beg + 3)) {
-                        fwrite(&b[key_beg + 3], 1, n - key_beg - 3, ofile);
-                    }
-                }
-            }
-            fclose(ifile);
-            fflush(ofile);
-            fclose(ofile);
-            if (b)
-                free(b);
-            return 0;
-        } else {
-            fclose(ifile);
-            return 2;
-        }
-    }
-    return 1;
-}
 
 // replace the value of a given parameter name for the provided config file
 // it will use a temporary file
