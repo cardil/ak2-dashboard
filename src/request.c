@@ -427,30 +427,17 @@ int detect_printer_defaults(const char **printer_model, const char **cfg_path, c
     }
 }
 
-#define MAX_DATA_SLOTS 100
-#define MIN_SUPPORTED_GRID_SIZE 2
 #define MAX_SUPPORTED_GRID_SIZE 10
 #define BYTES_PER_GRID_ELEMENT 15
 #define MESH_BUFFER_SIZE (MAX_SUPPORTED_GRID_SIZE * MAX_SUPPORTED_GRID_SIZE * BYTES_PER_GRID_ELEMENT + 1)
-#define MESH_MATRIX_ELEMENTS (MAX_SUPPORTED_GRID_SIZE * MAX_SUPPORTED_GRID_SIZE + 1)
 
 // keep the last used mesh in format printer*.cfg
 char mesh_config[MESH_BUFFER_SIZE];
-// keep the last used mesh in matrix format for the 3d visualizer
-char mesh_matrix[MESH_BUFFER_SIZE];
 // keeps the last detected grid size from printer*.cfg, 0-unknown
 int mesh_grid = 0;
-// last detected probe_count_x & probe_count_y, 0-unknown
-int probe_count_x = 0;
-int probe_count_y = 0;
-// last detected x_count & y_count, 0-unknown
-int x_count = 0;
-int y_count = 0;
 // bed temperature
 int bed_temp = 60;
 
-// mesh values (current bed leveling mesh)
-double mesh_values[MESH_MATRIX_ELEMENTS];
 // selected average precision from the config file
 double precision = 0.01;
 // set Z-offset in the printer*.cfg file
@@ -461,63 +448,14 @@ void mesh_config_clear(void) {
     memset(mesh_config, 0, MESH_BUFFER_SIZE);
 }
 
-// clear the buffer for mesh in 3d visualizer format
-void mesh_matrix_clear(void) {
-    memset(mesh_matrix, 0, MESH_BUFFER_SIZE);
-}
-
-// clear the mesh values
-void mesh_clear(double *mesh) {
-    int i;
-    for (i = 0; i < MESH_MATRIX_ELEMENTS; i++)
-        mesh[i] = 0.0;
-}
-
-// convert mesh_values[grid x grid] to mesh_matrix[grid x grid]
-// used format "%+1.4f"
-void mesh_matrix_export(double *mesh, int grid) {
-    int x, y, i, ii;
-    i = 0;
-    ii = 0;
-    mesh_matrix_clear();
-    for (y = 0; y < grid; y++) {
-        for (x = 0; x < grid; x++) {
-            if (x == (grid - 1)) {
-                sprintf(&mesh_matrix[ii], " %+1.4f\n", mesh[i]);
-                ii += 9;
-            } else {
-                if (x == 0) {
-                    sprintf(&mesh_matrix[ii], "%+1.4f", mesh[i]);
-                    ii += 7;
-                } else {
-                    sprintf(&mesh_matrix[ii], " %+1.4f", mesh[i]);
-                    ii += 8;
-                }
-            }
-            i++;
-        }
+// count comma-separated elements in mesh CSV string (returns element count)
+static int count_mesh_elements(const char *buffer) {
+    int count = 1;
+    if (!buffer || buffer[0] == '\n' || buffer[0] == '\0') return 0;
+    for (int i = 0; buffer[i] && buffer[i] != '\n'; i++) {
+        if (buffer[i] == ',') count++;
     }
-}
-
-// parse the mesh values from config file string to mesh_values[]
-// return the number of parsed elements (not the grid size!)
-int parse_mesh_values(char *buffer, double *mesh) {
-    int i;
-    int nn = 1;
-    mesh_clear(mesh);
-    if ((buffer[0] == '\n') || (buffer[0] == 0)) {
-        return 0;
-    }
-    mesh[0] = atof(buffer);
-    for (i = 0;; i++) {
-        if ((buffer[i] == '\n') || (buffer[i] == 0))
-            break;
-        if (buffer[i] == ',') {
-            mesh[nn] = atof(&buffer[i + 2]);
-            nn++;
-        }
-    }
-    return nn;
+    return count;
 }
 
 // results:
@@ -526,8 +464,6 @@ int parse_mesh_values(char *buffer, double *mesh) {
 // result=2 >>> missing mesh information
 // mesh_grid = detected grid size from the printer config file
 // mesh_config[] = copy of the mesh as shown in the printer config file
-// mesh_values[] = parsed values
-// mesh_matrix[] = formatted matrix for use in the 3d visualizer
 int read_mesh_from_config_file(const char *config_path) {
     int result = 2;
 
@@ -538,17 +474,12 @@ int read_mesh_from_config_file(const char *config_path) {
         char *b = NULL;
         size_t len = 0;
         ssize_t read;
-        int i, n, nn;
+        int n, nn;
 
         // clear the result
         mesh_config_clear();
-        mesh_clear(mesh_values);
         mesh_grid = 0;
         bed_temp = 60;
-        probe_count_x = 0;
-        probe_count_y = 0;
-        x_count = 0;
-        y_count = 0;
         z_offset = 0.0;
 
         // read the file line by line
@@ -570,23 +501,10 @@ int read_mesh_from_config_file(const char *config_path) {
                     // keep a copy of the original line
                     strcpy(mesh_config, &b[9]);
 
-                    nn = parse_mesh_values(&b[9], mesh_values);
-
-                    n = GRID[nn & 0xFF];
-                    mesh_grid = n;
-
-                    mesh_matrix_export(mesh_values, mesh_grid);
+                    nn = count_mesh_elements(&b[9]);
+                    mesh_grid = GRID[nn & 0xFF];
 
                     result = 0;
-                } else if (b[0] == 'p' && b[1] == 'r' && b[2] == 'o' && b[3] == 'b' && b[4] == 'e' && b[5] == '_' && b[6] == 'c' &&
-                          b[7] == 'o' && b[8] == 'u' && b[9] == 'n' && b[10] == 't' && b[11] == ' ' && b[12] == ':' && b[13] == ' ') {
-                    sscanf(&b[14], "%d,%d", &probe_count_x, &probe_count_y);
-                } else if (b[0] == 'x' && b[1] == '_' && b[2] == 'c' && b[3] == 'o' && b[4] == 'u' &&
-                          b[5] == 'n' && b[6] == 't' && b[7] == ' ' && b[8] == ':' && b[9] == ' ') {
-                    sscanf(&b[10], "%d", &x_count);
-                } else if (b[0] == 'y' && b[1] == '_' && b[2] == 'c' && b[3] == 'o' && b[4] == 'u' &&
-                          b[5] == 'n' && b[6] == 't' && b[7] == ' ' && b[8] == ':' && b[9] == ' ') {
-                    sscanf(&b[10], "%d", &y_count);
                 } else if (b[0] == 'z' && b[1] == '_' && b[2] == 'o' && b[3] == 'f' && b[4] == 'f' &&
                           b[5] == 's' && b[6] == 'e' && b[7] == 't' && b[8] == ' ' && b[9] == ':' && b[10] == ' ') {
                     z_offset = atof(&b[11]);
@@ -615,20 +533,6 @@ int read_mesh_from_printer_config(void) {
 }
 
 config_option_t leveling_config = NULL;
-
-int get_ssh_status(void) {
-    int ssh_status = 0;  // not installed
-    if (file_exists("/opt/etc/init.d/S51dropbear")) {
-        system_buffer[0] = 0;
-        system_with_output("pidof dropbear", 1);
-        if ((system_buffer[0] >= '0') && (system_buffer[0] <= '9')) {
-            ssh_status = 2;  // started
-        } else {
-            ssh_status = 1;  // stopped
-        }
-    }
-    return ssh_status;
-}
 
 // Read a U64 value from a file (used for cgroup memory files)
 // Returns 0 on success, -1 on failure
