@@ -230,7 +230,6 @@ mkmulti(struct REQUEST *req, int i) {
 void mkheader(struct REQUEST *req, int status) {
     int i;
     off_t len;
-    time_t expires;
 
     // Initialize ctime if not already set (e.g., for API responses)
     if (req->ctime[0] == '\0') {

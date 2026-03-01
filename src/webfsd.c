@@ -484,6 +484,7 @@ void xerror(int loglevel, char *txt, char *peerhost) {
 
 static void *
 mainloop(void *thread_arg) {
+    (void)thread_arg;  // required by pthread_create signature, not used
     struct REQUEST *conns = NULL;
     int curr_conn = 0;
 
