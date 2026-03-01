@@ -34,8 +34,24 @@ void handle_put_profile_slot(struct REQUEST *req, const char *profile_id_str, in
             "{\"status\": \"error\", \"message\": \"Missing request body.\"}");
     status_code = 400;
   } else {
-    char *mesh_data = get_json_value(req->req_body, "\"mesh_data\"");
-    if (mesh_data) {
+    // Note: get_json_value() uses a static buffer, copy values before next call
+    char mesh_data_buf[4096] = {0};
+    char z_offset_buf[32] = {0};
+
+    char *mesh_data_val = get_json_value(req->req_body, "\"mesh_data\"");
+    if (mesh_data_val) strncpy(mesh_data_buf, mesh_data_val, sizeof(mesh_data_buf) - 1);
+
+    char *z_offset_val = get_json_value(req->req_body, "\"z_offset\"");
+    if (z_offset_val) strncpy(z_offset_buf, z_offset_val, sizeof(z_offset_buf) - 1);
+
+    int has_mesh_data = (mesh_data_buf[0] != '\0');
+    int has_z_offset = (z_offset_buf[0] != '\0');
+
+    if (!has_mesh_data && !has_z_offset) {
+      snprintf(req->response_buffer, sizeof(req->response_buffer),
+              "{\"status\": \"error\", \"message\": \"Invalid JSON payload. Missing 'mesh_data' or 'z_offset'.\"}");
+      status_code = 400;
+    } else {
       char fn_buf[512];
       if (is_current) {
         snprintf(fn_buf, sizeof(fn_buf), "/user/webfs/data_slot_%d.txt", slot_id);
@@ -46,8 +62,38 @@ void handle_put_profile_slot(struct REQUEST *req, const char *profile_id_str, in
         snprintf(fn_buf, sizeof(fn_buf), "%s/data_slot_%d.txt", slots_dir, slot_id);
       }
 
-      if (custom_copy_file(NULL, fn_buf, "wb", mesh_data) == 0) {
-        // Log slot save
+      // If only z_offset provided (partial update), read existing mesh_data from file
+      if (!has_mesh_data && has_z_offset) {
+        FILE *existing = fopen(fn_buf, "r");
+        if (existing) {
+          if (fgets(mesh_data_buf, sizeof(mesh_data_buf) - 1, existing) != NULL) {
+            trim_trailing_whitespace(mesh_data_buf);
+          }
+          fclose(existing);
+          has_mesh_data = (mesh_data_buf[0] != '\0');
+        }
+        if (!has_mesh_data) {
+          snprintf(req->response_buffer, sizeof(req->response_buffer),
+                  "{\"status\": \"error\", \"message\": \"Slot file not found for partial update.\"}");
+          status_code = 404;
+          req->body = req->response_buffer;
+          req->lbody = strlen(req->response_buffer);
+          req->mime = "application/json";
+          mkheader(req, status_code);
+          return;
+        }
+      }
+
+      // Write file: line 1 = mesh_data, line 2 = z_offset (if provided)
+      FILE *f = fopen(fn_buf, "wb");
+      if (f) {
+        fputs(mesh_data_buf, f);
+        if (has_z_offset) {
+          fputc('\n', f);
+          fputs(z_offset_buf, f);
+        }
+        fclose(f);
+
         if (is_current) {
           LOG( "Mesh saved to slot %d\n", slot_id);
         } else {
@@ -61,10 +107,6 @@ void handle_put_profile_slot(struct REQUEST *req, const char *profile_id_str, in
                 "{\"status\": \"error\", \"message\": \"Failed to write to file.\"}");
         status_code = 500;
       }
-    } else {
-      snprintf(req->response_buffer, sizeof(req->response_buffer),
-              "{\"status\": \"error\", \"message\": \"Invalid JSON payload. Missing 'mesh_data'.\"}");
-      status_code = 400;
     }
   }
   req->body = req->response_buffer;

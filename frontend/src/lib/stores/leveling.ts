@@ -11,32 +11,30 @@ export interface LevelingSettings {
   precision: number
 }
 
-export interface MeshProfile {
+/** Slot represents any mesh data entry: active, saved, or average */
+export interface Slot {
   id: number | "active" | "average"
   name: string
   date?: string
   data: number[][]
-  zOffset?: number // Only for the active mesh
+  zOffset?: number // undefined = legacy/unknown, number = known z_offset
 }
 
 export interface LevelingStore {
-  settings: LevelingSettings | null
-  activeMesh: MeshProfile | null
-  savedMeshes: MeshProfile[]
-  averageMesh: MeshProfile | null
+  settings?: LevelingSettings
+  activeSlot?: Slot
+  savedSlots: Slot[]
+  averageSlot?: Slot
   isLoading: boolean // For the initial page load
   isUpdating: boolean // For background updates after an action
   rebootNeeded: boolean
-  error: string | null
+  error?: string
 }
 
 // --- Helper Functions ---
 
 /**
  * Parses a flat mesh string (e.g., "0.1, 0.2, 0.3...") into a 2D number array.
- * @param meshString The raw mesh data string.
- * @param gridSize The size of the grid (e.g., 5 for a 5x5 mesh).
- * @returns A 2D array of numbers representing the mesh.
  */
 function parseMeshString(meshString: string, gridSize: number): number[][] {
   const flatData = meshString.split(",").map((s) => parseFloat(s.trim()))
@@ -49,12 +47,9 @@ function parseMeshString(meshString: string, gridSize: number): number[][] {
 
 /**
  * Applies precision rounding to mesh data, matching the C backend's apply_precision function.
- * @param meshData 2D array of mesh values.
- * @param precision The precision value (e.g., 0.01 means round to nearest 0.01).
  */
 function applyPrecision(meshData: number[][], precision: number): void {
   if (precision === 0.0) return
-
   for (let i = 0; i < meshData.length; i++) {
     for (let j = 0; j < meshData[i].length; j++) {
       meshData[i][j] = Math.round(meshData[i][j] / precision) * precision
@@ -63,61 +58,59 @@ function applyPrecision(meshData: number[][], precision: number): void {
 }
 
 /**
- * Calculates the average of a list of saved mesh profiles.
- * @param meshes An array of saved mesh profiles.
- * @param gridSize The size of the grid.
- * @param precision The precision value to apply to the averaged mesh (default: 0.01).
- * @returns A new MeshProfile representing the average, or null if no meshes are provided.
+ * Calculates the average slot from a list of saved slots.
+ * Only slots that have z_offset contribute to the z_offset average.
  */
-function calculateAverageMesh(
-  meshes: MeshProfile[],
+function calculateAverageSlot(
+  slots: Slot[],
   gridSize: number,
   precision: number = 0.01,
-): MeshProfile | null {
-  if (meshes.length === 0) return null
+): Slot | undefined {
+  if (slots.length === 0) return undefined
 
   const avgData = Array.from({ length: gridSize }, () =>
     Array(gridSize).fill(0),
   )
-  for (const mesh of meshes) {
+  for (const slot of slots) {
     for (let i = 0; i < gridSize; i++) {
       for (let j = 0; j < gridSize; j++) {
-        avgData[i][j] += mesh.data[i][j]
+        avgData[i][j] += slot.data[i][j]
       }
     }
   }
-
   for (let i = 0; i < gridSize; i++) {
     for (let j = 0; j < gridSize; j++) {
-      avgData[i][j] = avgData[i][j] / meshes.length
+      avgData[i][j] /= slots.length
     }
   }
 
-  // Apply precision rounding, matching the C backend behavior
   applyPrecision(avgData, precision)
 
-  return { id: "average", name: "Average", data: avgData }
+  // Average z_offset only from slots that have it; undefined if none do
+  const withZ = slots.filter((s) => s.zOffset !== undefined)
+  const avgZOffset =
+    withZ.length > 0
+      ? withZ.reduce((acc, s) => acc + s.zOffset!, 0) / withZ.length
+      : undefined
+
+  return { id: "average", name: "Average", data: avgData, zOffset: avgZOffset }
 }
 
 // --- Store ---
 
 function createLevelingStore() {
   const { subscribe, set, update } = writable<LevelingStore>({
-    settings: null,
-    activeMesh: null,
-    savedMeshes: [],
-    averageMesh: null,
+    savedSlots: [],
     isLoading: true,
     isUpdating: false,
     rebootNeeded: false,
-    error: null,
   })
 
   async function fetchData(initial = false) {
     if (initial) {
-      update((s) => ({ ...s, isLoading: true, error: null }))
+      update((s) => ({ ...s, isLoading: true, error: undefined }))
     } else {
-      update((s) => ({ ...s, isUpdating: true, error: null }))
+      update((s) => ({ ...s, isUpdating: true, error: undefined }))
     }
 
     try {
@@ -125,36 +118,37 @@ function createLevelingStore() {
       const status = await api.getProfile(selectedProfile)
       const gridSize = status.settings.grid_size
 
-      const activeMesh: MeshProfile = {
+      const activeSlot: Slot = {
         id: "active",
         name: "Active",
-        data: parseMeshString(status.active_mesh.mesh_data, gridSize),
-        zOffset: status.settings.z_offset, // z_offset comes from settings in the C backend
+        data: parseMeshString(status.active_slot.mesh_data, gridSize),
+        zOffset: status.active_slot.z_offset,
       }
 
-      const savedMeshes: MeshProfile[] = status.saved_meshes.map((sm) => ({
-        id: sm.id,
+      const savedSlots: Slot[] = status.saved_slots.map((sm) => ({
+        id: sm.id!,
         name: `Slot ${sm.id}`,
         date: sm.date,
         data: parseMeshString(sm.mesh_data, gridSize),
+        zOffset: sm.z_offset,
       }))
 
       const precision = status.settings.precision
-      const averageMesh = calculateAverageMesh(savedMeshes, gridSize, precision)
+      const averageSlot = calculateAverageSlot(savedSlots, gridSize, precision)
 
       set({
-        ...get(levelingStore), // Preserve existing state like rebootNeeded
+        ...get(levelingStore),
         settings: {
           gridSize: status.settings.grid_size,
           bedTemp: status.settings.bed_temp,
           precision: status.settings.precision,
         },
-        activeMesh,
-        savedMeshes,
-        averageMesh,
+        activeSlot,
+        savedSlots,
+        averageSlot,
         isLoading: false,
         isUpdating: false,
-        error: null,
+        error: undefined,
       })
     } catch (e: any) {
       update((s) => ({
@@ -171,7 +165,7 @@ function createLevelingStore() {
     try {
       const selectedProfile = get(profilesStore).selectedProfile
       await api.deleteSlot(selectedProfile, slotId)
-      await fetchData() // Refetch data to update the state
+      await fetchData()
     } catch (e: any) {
       update((s) => ({
         ...s,
@@ -192,34 +186,31 @@ function createLevelingStore() {
     update((s) => ({ ...s, isUpdating: true }))
     try {
       const selectedProfile = get(profilesStore).selectedProfile
-      const apiSettings: Omit<api.ProfileSettings, "z_offset"> = {
+      const apiSettings: api.ProfileSettings = {
         grid_size: settings.gridSize,
         bed_temp: settings.bedTemp,
         precision: settings.precision,
       }
       const response = await api.updateSettings(selectedProfile, apiSettings)
 
-      // Only set rebootNeeded for "current" profile (the one actually on the printer)
-      // Saved profiles can be edited without affecting the printer state
       if (response.grid_size_changed && selectedProfile === "current") {
         update((s) => ({ ...s, rebootNeeded: true }))
       }
 
-      // If precision changed, recalculate average mesh immediately if we have saved meshes
       if (
         precisionChanged &&
-        currentStore.savedMeshes.length > 0 &&
+        currentStore.savedSlots.length > 0 &&
         currentStore.settings
       ) {
-        const newAverageMesh = calculateAverageMesh(
-          currentStore.savedMeshes,
+        const newAverageSlot = calculateAverageSlot(
+          currentStore.savedSlots,
           currentStore.settings.gridSize,
           settings.precision,
         )
-        update((s) => ({ ...s, averageMesh: newAverageMesh }))
+        update((s) => ({ ...s, averageSlot: newAverageSlot }))
       }
 
-      await fetchData() // Refetch data to update the state
+      await fetchData()
       return response
     } catch (e: any) {
       update((s) => ({
@@ -236,11 +227,16 @@ function createLevelingStore() {
     try {
       const selectedProfile = get(profilesStore).selectedProfile
       const store = get(levelingStore)
-      if (!store.activeMesh) {
+      if (!store.activeSlot) {
         throw new Error("No active mesh to save")
       }
-      const meshData = store.activeMesh.data.flat().join(", ")
-      await api.saveSlot(selectedProfile, slotId, meshData)
+      const meshData = store.activeSlot.data.flat().join(", ")
+      await api.saveSlot(
+        selectedProfile,
+        slotId,
+        meshData,
+        store.activeSlot.zOffset,
+      )
       await fetchData()
     } catch (e: any) {
       update((s) => ({
@@ -256,8 +252,15 @@ function createLevelingStore() {
     update((s) => ({ ...s, isUpdating: true }))
     try {
       const selectedProfile = get(profilesStore).selectedProfile
+      const store = get(levelingStore)
+      const existingSlot = store.savedSlots.find((s) => s.id === slotId)
       const meshData = editedData.flat().join(", ")
-      await api.saveSlot(selectedProfile, slotId, meshData) // Re-use the same API endpoint
+      await api.saveSlot(
+        selectedProfile,
+        slotId,
+        meshData,
+        existingSlot?.zOffset,
+      )
       await fetchData()
     } catch (e: any) {
       update((s) => ({
@@ -274,12 +277,12 @@ function createLevelingStore() {
     try {
       const selectedProfile = get(profilesStore).selectedProfile
       const store = get(levelingStore)
-      const slot = store.savedMeshes.find((s) => s.id === slotId)
+      const slot = store.savedSlots.find((s) => s.id === slotId)
       if (!slot) {
         throw new Error(`Slot ${slotId} not found`)
       }
       const meshData = slot.data.flat().join(", ")
-      await api.updatePrinterMesh(selectedProfile, meshData)
+      await api.updatePrinterMesh(selectedProfile, meshData, slot.zOffset)
       await fetchData()
     } catch (e: any) {
       update((s) => ({
@@ -296,8 +299,7 @@ function createLevelingStore() {
     try {
       const selectedProfile = get(profilesStore).selectedProfile
       const store = get(levelingStore)
-      // Delete all slots individually since the backend doesn't support bulk delete
-      const deletePromises = store.savedMeshes.map((slot) => {
+      const deletePromises = store.savedSlots.map((slot) => {
         if (typeof slot.id === "number") {
           return api.deleteSlot(selectedProfile, slot.id)
         }
@@ -317,13 +319,14 @@ function createLevelingStore() {
 
   async function activateAverageMesh() {
     const store = get(levelingStore)
-    if (store.averageMesh) {
+    if (store.averageSlot) {
       update((s) => ({ ...s, isUpdating: true }))
       try {
         const selectedProfile = get(profilesStore).selectedProfile
         await api.updatePrinterMesh(
           selectedProfile,
-          store.averageMesh.data.flat().join(", "),
+          store.averageSlot.data.flat().join(", "),
+          store.averageSlot.zOffset,
         )
         await fetchData()
       } catch (e: any) {
@@ -334,6 +337,31 @@ function createLevelingStore() {
         }))
         throw e
       }
+    }
+  }
+
+  /**
+   * Update z_offset for a slot.
+   * - Active slot ("active"): updates via settings API (writes to printer.cfg)
+   * - Saved slot (number): partial update via slot API (writes line 2 of .txt file)
+   */
+  async function updateZOffset(slotId: number | "active", newZOffset: number) {
+    update((s) => ({ ...s, isUpdating: true }))
+    try {
+      const selectedProfile = get(profilesStore).selectedProfile
+      if (slotId === "active") {
+        await api.updateActiveZOffset(selectedProfile, newZOffset)
+      } else {
+        await api.updateSlotZOffset(selectedProfile, slotId, newZOffset)
+      }
+      await fetchData()
+    } catch (e: any) {
+      update((s) => ({
+        ...s,
+        isUpdating: false,
+        error: e.message || `Failed to update z_offset for slot ${slotId}.`,
+      }))
+      throw e
     }
   }
 
@@ -351,6 +379,7 @@ function createLevelingStore() {
     activateSlot,
     deleteAllSlots,
     activateAverageMesh,
+    updateZOffset,
   }
 }
 

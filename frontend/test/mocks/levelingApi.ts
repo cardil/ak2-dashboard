@@ -8,25 +8,21 @@ export interface ProfileSettings {
   grid_size: number
   bed_temp: number
   precision: number
-  z_offset: number // z_offset is returned in settings by the C backend
 }
 
-export interface MeshData {
+export interface Slot {
+  id?: number // present for saved slots; absent for active_slot
+  date?: string // present for saved slots
   mesh_data: string
-}
-
-export interface SavedMesh {
-  id: number
-  date: string
-  mesh_data: string
+  z_offset?: number // undefined = legacy slot without z_offset
 }
 
 export interface ProfileDetails {
   id: number | "current"
   name?: string // Optional for "current" profile
   settings: ProfileSettings
-  active_mesh: MeshData
-  saved_meshes: SavedMesh[]
+  active_slot: Slot
+  saved_slots: Slot[]
   loaded_from?: number // Optional, indicates which profile was last applied to Current
 }
 
@@ -95,36 +91,41 @@ const mockCurrentProfile: ProfileDetails = {
     grid_size: 5,
     bed_temp: 60,
     precision: 0.01,
-    z_offset: 1.443, // z_offset is in settings
   },
-  active_mesh: {
+  active_slot: {
     mesh_data: generateSlopedMeshData(5, "y-positive"),
+    z_offset: 1.443,
   },
-  saved_meshes: [
+  saved_slots: [
     {
       id: 1,
       date: "2025-11-12 10:30:00",
       mesh_data: generateSlopedMeshData(5, "x-positive"),
+      z_offset: 1.443,
     },
     {
       id: 2,
       date: "2025-11-11 15:45:00",
       mesh_data: generateSlopedMeshData(5, "x-negative"),
+      z_offset: 1.51,
     },
     {
       id: 3,
       date: "2025-11-12 10:30:00",
       mesh_data: generateSlopedMeshData(5, "y-positive"),
+      z_offset: 1.38,
     },
     {
       id: 4,
       date: "2025-11-11 15:45:00",
       mesh_data: generateSlopedMeshData(5, "y-negative"),
+      // no z_offset = legacy slot
     },
     {
       id: 10,
       date: "2025-11-12 22:45:00",
       mesh_data: generateSlopedMeshData(5, "flat"),
+      z_offset: 1.42,
     },
   ],
 }
@@ -142,19 +143,22 @@ const mockProfiles: Map<number, ProfileDetails> = new Map([
         precision: 0.01,
         z_offset: 1.2,
       },
-      active_mesh: {
+      active_slot: {
         mesh_data: generateSlopedMeshData(5, "x-positive"),
+        z_offset: 1.2,
       },
-      saved_meshes: [
+      saved_slots: [
         {
           id: 1,
           date: "2025-11-10 09:15:00",
           mesh_data: generateSlopedMeshData(5, "flat"),
+          z_offset: 1.2,
         },
         {
           id: 2,
           date: "2025-11-09 14:30:00",
           mesh_data: generateSlopedMeshData(5, "y-positive"),
+          // no z_offset = legacy slot
         },
       ],
     },
@@ -170,19 +174,22 @@ const mockProfiles: Map<number, ProfileDetails> = new Map([
         precision: 0.02,
         z_offset: 0.8,
       },
-      active_mesh: {
+      active_slot: {
         mesh_data: generateSlopedMeshData(5, "x-negative"),
+        z_offset: 0.8,
       },
-      saved_meshes: [
+      saved_slots: [
         {
           id: 1,
           date: "2025-11-08 11:45:00",
           mesh_data: generateSlopedMeshData(5, "y-negative"),
+          z_offset: 0.8,
         },
         {
           id: 3,
           date: "2025-11-07 16:20:00",
           mesh_data: generateSlopedMeshData(5, "flat"),
+          z_offset: 0.79,
         },
       ],
     },
@@ -198,14 +205,16 @@ const mockProfiles: Map<number, ProfileDetails> = new Map([
         precision: 0.005,
         z_offset: 1.0,
       },
-      active_mesh: {
+      active_slot: {
         mesh_data: generateSlopedMeshData(5, "flat"),
+        z_offset: 1.0,
       },
-      saved_meshes: [
+      saved_slots: [
         {
           id: 1,
           date: "2025-11-06 13:10:00",
           mesh_data: generateSlopedMeshData(5, "x-positive"),
+          z_offset: 1.0,
         },
       ],
     },
@@ -254,12 +263,12 @@ export async function getProfile(
               grid_size: 5,
               bed_temp: 60,
               precision: 0.01,
+            },
+            active_slot: {
+              mesh_data: generateSlopedMeshData(5, "flat"),
               z_offset: 0,
             },
-            active_mesh: {
-              mesh_data: generateSlopedMeshData(5, "flat"),
-            },
-            saved_meshes: [],
+            saved_slots: [],
           })
         }
       }
@@ -284,9 +293,9 @@ export async function deleteSlot(
     )
   }
 
-  const index = profile.saved_meshes.findIndex((mesh) => mesh.id === slotId)
+  const index = profile.saved_slots.findIndex((slot) => slot.id === slotId)
   if (index !== -1) {
-    profile.saved_meshes.splice(index, 1)
+    profile.saved_slots.splice(index, 1)
     return new Promise((resolve) =>
       setTimeout(
         () =>
@@ -338,15 +347,11 @@ export async function updateSettings(
   let gridSizeChanged = false
   if (settings.grid_size !== profile.settings.grid_size) {
     gridSizeChanged = true
-    profile.saved_meshes = []
+    profile.saved_slots = []
     const newSize = settings.grid_size * settings.grid_size
-    profile.active_mesh.mesh_data = Array(newSize).fill("0.000000").join(", ")
+    profile.active_slot.mesh_data = Array(newSize).fill("0.000000").join(", ")
   }
-  // Update settings but preserve z_offset (it's read-only)
-  profile.settings = {
-    ...settings,
-    z_offset: profile.settings.z_offset,
-  }
+  profile.settings = { ...settings }
 
   const response: SaveSettingsResponse = {
     status: "success",
@@ -360,6 +365,7 @@ export async function saveSlot(
   profileId: number | "current",
   slotId: number,
   meshData: string,
+  zOffset?: number,
 ): Promise<{ status: string; message: string }> {
   console.log(`Mock API: Saving mesh to slot ${slotId} in profile ${profileId}`)
 
@@ -374,25 +380,17 @@ export async function saveSlot(
     )
   }
 
-  if (!profile.active_mesh) {
-    return new Promise((resolve) =>
-      setTimeout(
-        () => resolve({ status: "error", message: "No active mesh to save." }),
-        500,
-      ),
-    )
-  }
-  const existingSlot = profile.saved_meshes.find((mesh) => mesh.id === slotId)
+  const existingSlot = profile.saved_slots.find((slot) => slot.id === slotId)
   if (existingSlot) {
-    // Overwrite existing slot
     existingSlot.mesh_data = meshData
     existingSlot.date = new Date().toISOString().slice(0, 19).replace("T", " ")
+    if (zOffset !== undefined) existingSlot.z_offset = zOffset
   } else {
-    // Add new slot
-    profile.saved_meshes.push({
+    profile.saved_slots.push({
       id: slotId,
       date: new Date().toISOString().slice(0, 19).replace("T", " "),
       mesh_data: meshData,
+      z_offset: zOffset,
     })
   }
   return new Promise((resolve) =>
@@ -407,9 +405,85 @@ export async function saveSlot(
   )
 }
 
+export async function updateSlotZOffset(
+  profileId: number | "current",
+  slotId: number,
+  zOffset: number,
+): Promise<{ status: string; message: string }> {
+  console.log(
+    `Mock API: Updating z_offset for slot ${slotId} in profile ${profileId}`,
+  )
+
+  const profile =
+    profileId === "current" ? mockCurrentProfile : mockProfiles.get(profileId)
+  if (!profile) {
+    return new Promise((resolve) =>
+      setTimeout(
+        () => resolve({ status: "error", message: "Profile not found." }),
+        500,
+      ),
+    )
+  }
+
+  const existingSlot = profile.saved_slots.find((slot) => slot.id === slotId)
+  if (existingSlot) {
+    existingSlot.z_offset = zOffset
+    return new Promise((resolve) =>
+      setTimeout(
+        () => resolve({ status: "success", message: "Z-offset updated." }),
+        500,
+      ),
+    )
+  }
+  return new Promise((resolve) =>
+    setTimeout(
+      () => resolve({ status: "error", message: "Slot not found." }),
+      500,
+    ),
+  )
+}
+
+export async function updateActiveZOffset(
+  profileId: number | "current",
+  zOffset: number,
+): Promise<SaveSettingsResponse> {
+  console.log(`Mock API: Updating active z_offset for profile ${profileId}`)
+
+  const profile =
+    profileId === "current" ? mockCurrentProfile : mockProfiles.get(profileId)
+  if (!profile) {
+    return new Promise((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            status: "error",
+            message: "Profile not found.",
+            grid_size_changed: false,
+          }),
+        500,
+      ),
+    )
+  }
+
+  profile.active_slot.z_offset = zOffset
+
+  return new Promise((resolve) =>
+    setTimeout(
+      () =>
+        resolve({
+          status: "success",
+          message: "Z-offset updated.",
+          grid_size_changed: false,
+        }),
+      500,
+    ),
+  )
+}
+
 export async function updatePrinterMesh(
   profileId: number | "current",
   meshData: string,
+  zOffset?: number,
 ): Promise<{ status: string; message: string }> {
   console.log(`Mock API: Updating printer mesh for profile ${profileId}`)
 
@@ -424,7 +498,10 @@ export async function updatePrinterMesh(
     )
   }
 
-  profile.active_mesh.mesh_data = meshData
+  profile.active_slot.mesh_data = meshData
+  if (zOffset !== undefined) {
+    profile.active_slot.z_offset = zOffset
+  }
   return new Promise((resolve) =>
     setTimeout(
       () => resolve({ status: "success", message: "Mesh content activated." }),
@@ -438,7 +515,7 @@ export async function deleteAllMeshSlots(): Promise<{
   message: string
 }> {
   console.log(`Mock API: Deleting all mesh slots`)
-  mockCurrentProfile.saved_meshes = []
+  mockCurrentProfile.saved_slots = []
   return new Promise((resolve) =>
     setTimeout(
       () => resolve({ status: "success", message: "All mesh slots deleted." }),
@@ -455,7 +532,6 @@ export async function createProfile(
     `Mock API: Creating profile from source ${sourceId} with name "${name}"`,
   )
 
-  // Get source profile data
   let sourceProfile: ProfileDetails
   if (sourceId === "current") {
     sourceProfile = mockCurrentProfile
@@ -476,17 +552,20 @@ export async function createProfile(
     sourceProfile = profile
   }
 
-  // Create new profile with copied data
   const newId = nextProfileId++
   const newProfile: ProfileDetails = {
     id: newId,
     name,
     settings: { ...sourceProfile.settings },
-    active_mesh: { mesh_data: sourceProfile.active_mesh.mesh_data },
-    saved_meshes: sourceProfile.saved_meshes.map((sm) => ({
+    active_slot: {
+      mesh_data: sourceProfile.active_slot.mesh_data,
+      z_offset: sourceProfile.active_slot.z_offset,
+    },
+    saved_slots: sourceProfile.saved_slots.map((sm) => ({
       id: sm.id,
       date: sm.date,
       mesh_data: sm.mesh_data,
+      z_offset: sm.z_offset,
     })),
   }
 
@@ -536,7 +615,6 @@ export async function deleteProfileById(
   const index = mockProfileList.profiles.findIndex((p) => p.id === id)
   if (index !== -1) {
     mockProfileList.profiles.splice(index, 1)
-    // Clear loaded_from if it matches the deleted profile
     if (mockProfileList.loaded_from === id) {
       mockProfileList.loaded_from = undefined
       mockCurrentProfile.loaded_from = undefined
@@ -565,7 +643,6 @@ export async function saveAsProfile(
     `Mock API: Saving profile ${sourceId} to target ${target}${name ? ` with name "${name}"` : ""}`,
   )
 
-  // Validate illegal operations
   if (sourceId === "current" && target === "current") {
     return new Promise((resolve) =>
       setTimeout(
@@ -608,7 +685,6 @@ export async function saveAsProfile(
   }
 
   if (target === "current") {
-    // Apply profile to current
     if (typeof sourceId === "number") {
       mockProfileList.loaded_from = sourceId
       mockCurrentProfile.loaded_from = sourceId
@@ -625,7 +701,6 @@ export async function saveAsProfile(
     )
   }
 
-  // Overwrite existing profile
   return new Promise((resolve) =>
     setTimeout(
       () =>
@@ -640,7 +715,6 @@ export async function saveAsProfile(
 
 export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
   return (req, res, next) => {
-    // Handle new profiles API endpoints
     if (req.url?.startsWith("/api/profiles")) {
       res.setHeader("Content-Type", "application/json")
 
@@ -652,7 +726,7 @@ export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
         return
       }
 
-      // GET /api/profiles/current - Get current profile details
+      // GET /api/profiles/current
       if (req.method === "GET" && req.url === "/api/profiles/current") {
         getProfile("current").then((data) => {
           res.end(JSON.stringify(data))
@@ -660,7 +734,7 @@ export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
         return
       }
 
-      // GET /api/profiles/{id} - Get specific profile details
+      // GET /api/profiles/{id}
       const getProfileMatch = req.url.match(/^\/api\/profiles\/(\d+)$/)
       if (req.method === "GET" && getProfileMatch) {
         const profileId = parseInt(getProfileMatch[1], 10)
@@ -712,7 +786,7 @@ export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
         return
       }
 
-      // PUT /api/profiles/current/slots/{id}
+      // PUT /api/profiles/{id}/slots/{n}
       const putSlotMatch = req.url.match(
         /^\/api\/profiles\/(current|\d+)\/slots\/(\d+)$/,
       )
@@ -727,16 +801,34 @@ export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
           body += chunk.toString()
         })
         req.on("end", () => {
-          const { mesh_data } = JSON.parse(body)
-          saveSlot(profileId, slotId, mesh_data).then((response) => {
-            res.statusCode = response.status === "success" ? 200 : 400
-            res.end(JSON.stringify(response))
-          })
+          const parsed = JSON.parse(body)
+          const { mesh_data, z_offset } = parsed
+          if (mesh_data) {
+            saveSlot(profileId, slotId, mesh_data, z_offset).then(
+              (response) => {
+                res.statusCode = response.status === "success" ? 200 : 400
+                res.end(JSON.stringify(response))
+              },
+            )
+          } else if (z_offset !== undefined) {
+            updateSlotZOffset(profileId, slotId, z_offset).then((response) => {
+              res.statusCode = response.status === "success" ? 200 : 400
+              res.end(JSON.stringify(response))
+            })
+          } else {
+            res.statusCode = 400
+            res.end(
+              JSON.stringify({
+                status: "error",
+                message: "Missing mesh_data or z_offset.",
+              }),
+            )
+          }
         })
         return
       }
 
-      // PUT /api/profiles/current/printer-mesh
+      // PUT /api/profiles/{id}/printer-mesh
       const putPrinterMeshMatch = req.url.match(
         /^\/api\/profiles\/(current|\d+)\/printer-mesh$/,
       )
@@ -750,8 +842,8 @@ export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
           body += chunk.toString()
         })
         req.on("end", () => {
-          const { mesh_data } = JSON.parse(body)
-          updatePrinterMesh(profileId, mesh_data).then((response) => {
+          const { mesh_data, z_offset } = JSON.parse(body)
+          updatePrinterMesh(profileId, mesh_data, z_offset).then((response) => {
             res.statusCode = response.status === "success" ? 200 : 400
             res.end(JSON.stringify(response))
           })
@@ -759,7 +851,7 @@ export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
         return
       }
 
-      // DELETE /api/profiles/current/slots/{id}
+      // DELETE /api/profiles/{id}/slots/{n}
       const deleteSlotMatch = req.url.match(
         /^\/api\/profiles\/(current|\d+)\/slots\/(\d+)$/,
       )
@@ -776,7 +868,7 @@ export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
         return
       }
 
-      // PUT /api/profiles/{id} - Update profile metadata
+      // PUT /api/profiles/{id}
       const putProfileMatch = req.url.match(/^\/api\/profiles\/(\d+)$/)
       if (req.method === "PUT" && putProfileMatch) {
         const profileId = parseInt(putProfileMatch[1], 10)
@@ -794,7 +886,7 @@ export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
         return
       }
 
-      // DELETE /api/profiles/{id} - Delete profile
+      // DELETE /api/profiles/{id}
       const deleteProfileMatch = req.url.match(/^\/api\/profiles\/(\d+)$/)
       if (req.method === "DELETE" && deleteProfileMatch) {
         const profileId = parseInt(deleteProfileMatch[1], 10)
@@ -805,7 +897,7 @@ export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
         return
       }
 
-      // POST /api/profiles/{id}/save-as - Save profile to target
+      // POST /api/profiles/{id}/save-as
       const saveAsMatch = req.url.match(
         /^\/api\/profiles\/(current|\d+)\/save-as$/,
       )
@@ -829,7 +921,7 @@ export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
       }
     }
 
-    // Fallback for old /api/leveling endpoints (for backward compatibility during transition)
+    // Fallback for old /api/leveling endpoints
     if (req.url?.startsWith("/api/leveling")) {
       res.setHeader("Content-Type", "application/json")
 
@@ -839,8 +931,6 @@ export function createLevelingApiMiddleware(): Connect.NextHandleFunction {
         })
         return
       }
-
-      // Other old endpoints can redirect to new ones if needed
     }
 
     next()
