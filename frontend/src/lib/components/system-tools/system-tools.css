@@ -1,15 +1,5 @@
 /* Shared styles for system-tools components */
 
-.card-title {
-  margin: 0;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--card-border-color);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1.1em;
-}
-
 .tool-section {
   display: flex;
   flex-direction: column;

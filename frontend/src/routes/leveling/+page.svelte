@@ -375,7 +375,7 @@
   <div class="page-container">
     <div class="column">
       <!-- Profile Selector Card -->
-      <Card>
+      <Card style="flex-shrink: 0;">
         <svelte:fragment slot="title">
           <h3 class="card-title">
             <FontAwesomeIcon icon={faUser} /> Profile
@@ -556,9 +556,20 @@
       <!-- Saved Bed Meshes Card -->
       <Card style="flex-grow: 1; min-height: 0;">
         <svelte:fragment slot="title">
-          <h3 class="card-title">
-            <FontAwesomeIcon icon={faHdd} /> Saved Bed Meshes
-          </h3>
+          <div class="card-title-row">
+            <h3 class="card-title">
+              <FontAwesomeIcon icon={faHdd} /> Saved Bed Meshes
+            </h3>
+            {#if $levelingStore.savedSlots.length > 0}
+              <button
+                class="header-danger-btn"
+                title="Delete all saved meshes"
+                on:click={deleteAllSlots}
+              >
+                <FontAwesomeIcon icon={faTrash} />
+              </button>
+            {/if}
+          </div>
         </svelte:fragment>
         <div class="mesh-list">
           {#each $levelingStore.savedSlots as slot (slot.id)}
@@ -625,11 +636,6 @@
             </div>
           {/each}
         </div>
-        <div class="button-group spaced">
-          <button class="danger" on:click={deleteAllSlots}
-            ><FontAwesomeIcon icon={faTrash} /> Delete all</button
-          >
-        </div>
       </Card>
     </div>
 
@@ -690,10 +696,11 @@
 <style>
   .page-container {
     display: grid;
-    grid-template-columns: 35% 1fr;
-    gap: 1rem;
-    padding: 1rem;
+    grid-template-columns: minmax(260px, 35%) 1fr;
+    gap: 0.5rem;
+    padding: 0.5rem;
     height: 100%;
+    overflow: hidden;
   }
 
   .loading-container,
@@ -720,14 +727,16 @@
   .column {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.5rem;
     min-height: 0;
+    overflow: hidden;
   }
 
   .column-group {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.5rem;
+    flex-shrink: 0;
   }
 
   .visualizer-content {
@@ -746,20 +755,36 @@
   .visualizer-column {
     min-height: 0;
   }
-  .card-title {
-    margin: 0;
-    border-bottom: 1px solid var(--card-border-color);
-    padding-bottom: 0.75rem;
-    margin-bottom: -0.25rem;
+
+  .card-title-row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .header-danger-btn {
+    padding: 0.15rem 0.35rem;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: #dc3545;
+    cursor: pointer;
+    opacity: 0.7;
+    font-size: 0.85em;
+    display: flex;
+    align-items: center;
+    transition: opacity 0.15s;
+  }
+  .header-danger-btn:hover {
+    opacity: 1;
+    background-color: rgba(220, 53, 69, 0.1);
   }
 
   .settings-form {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(3, 1fr) auto;
+    gap: 0.5rem;
     align-items: flex-end;
   }
   .settings-form .button-group {
@@ -790,9 +815,6 @@
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
-  }
-  .button-group.spaced {
-    justify-content: space-between;
   }
 
   button {
