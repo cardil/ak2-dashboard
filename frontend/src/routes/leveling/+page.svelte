@@ -564,6 +564,8 @@
               <button
                 class="header-danger-btn"
                 title="Delete all saved meshes"
+                aria-label="Delete all saved meshes"
+                type="button"
                 on:click={deleteAllSlots}
               >
                 <FontAwesomeIcon icon={faTrash} />
