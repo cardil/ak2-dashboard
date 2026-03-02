@@ -929,6 +929,8 @@
   @media (max-width: 900px) {
     .page-container {
       grid-template-columns: 1fr;
+      overflow-y: auto;
+      height: auto;
     }
   }
 </style>
