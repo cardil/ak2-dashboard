@@ -50,10 +50,12 @@
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    min-width: 0;
   }
 
   select {
     flex: 1;
+    min-width: 0;
     padding: 0.5rem;
     border: 1px solid var(--card-border-color);
     border-radius: 5px;
@@ -61,6 +63,8 @@
     color: var(--text-color);
     font-size: 1rem;
     cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   select:disabled {
@@ -78,8 +82,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 2.5rem;
-    height: 2.5rem;
+    min-width: 2rem;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
   }
 
   .icon-button:hover {
