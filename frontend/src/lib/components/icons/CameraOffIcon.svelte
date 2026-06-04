@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil) -->
 <!--
   This component renders an inline SVG of a camera with a slash through it.
   Using it as a Svelte component allows the `currentColor` property to correctly

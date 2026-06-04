@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 # Script to get deployment configuration for printer
 # Reuses config directory from kobra2-fw-tools for consistency
 

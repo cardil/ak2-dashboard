@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 import { marked } from "marked"
 import docsMarkdown from "../../../../DOCS.md?raw"
 

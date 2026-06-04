@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 import { test, expect } from '@playwright/test';
 import { generateBedMesh } from './helpers';
 import { EXPECT_TIMEOUT, UI_TRANSITION_TIMEOUT } from './config';

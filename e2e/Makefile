@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 # E2E Test Makefile
 # This Makefile contains all E2E testbed and testing targets
 

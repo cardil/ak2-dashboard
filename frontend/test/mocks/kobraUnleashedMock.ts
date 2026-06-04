@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 import { Server as SocketIOServer } from "socket.io"
 import { mockPrinter, type Printer, type PrintJob } from "./kobraData"
 import type { ViteDevServer, Connect } from "vite"

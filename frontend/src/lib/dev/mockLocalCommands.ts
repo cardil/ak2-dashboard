@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 // frontend/src/lib/dev/mockLocalCommands.ts
 import { webserverStore } from "$lib/stores/webserver"
 import { pushState } from "$app/navigation"

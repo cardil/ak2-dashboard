@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-FileCopyrightText: 1999-2003 Gerd Hoffmann <kraxel@bytesex.org>
+// SPDX-FileCopyrightText: 2017 AGG2017
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
+//
 #ifndef HTTPD_H
 #define HTTPD_H
 

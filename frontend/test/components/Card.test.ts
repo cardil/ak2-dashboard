@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 import { render, screen } from "@testing-library/svelte"
 import { describe, it, expect } from "vitest"
 import TestCard from "./TestCard.svelte"
