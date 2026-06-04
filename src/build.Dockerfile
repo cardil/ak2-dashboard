@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 # ARM compiler for webfsd cross-compilation with glibc
 # Uses Debian Jessie (glibc 2.19) - backward compatible with printer's glibc 2.23
 # Native ARM gcc via QEMU emulation

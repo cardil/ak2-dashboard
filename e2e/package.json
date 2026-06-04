@@ -1,6 +1,7 @@
 {
   "name": "ak2-e2e-tests",
   "version": "1.0.0",
+  "license": "Apache-2.0",
   "description": "E2E tests for AK2 Dashboard using Playwright",
   "type": "module",
   "scripts": {
