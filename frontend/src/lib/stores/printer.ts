@@ -182,8 +182,11 @@ function createPrinterStore() {
               newJob &&
               (!prevJob || newJob.taskid !== prevJob?.taskid)
             ) {
-              // New task started — clear sentinel tracking for old tasks
-              tasksWithRealZOffset.clear()
+              // New task started — drop only old task tracking, then seed
+              // new task if the first update already has a real non-zero value
+              if (prevJob) tasksWithRealZOffset.delete(prevJob.taskid)
+              if (newJob.z_offset !== 0.0)
+                tasksWithRealZOffset.add(newJob.taskid)
             }
 
             return {
