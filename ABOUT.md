@@ -102,7 +102,7 @@ The project continues to evolve, with the community constantly discovering new c
 
 ### Built With
 - **[WEBFS](https://linux.bytesex.org/misc/webfs.html)** - Optimized static web server
-- **[MUSL](https://musl.libc.org)** - Lightweight C standard library for ARM cross-compilation
+- **[glibc](https://www.gnu.org/software/libc/)** - GNU C Library used for ARM cross-compilation
 - **[Svelte](https://svelte.dev/)** - Modern reactive web framework
 - **[ECharts](https://echarts.apache.org/)** - 3D mesh visualization
 
