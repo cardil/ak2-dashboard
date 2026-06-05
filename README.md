@@ -172,7 +172,7 @@ This project uses a **split license** model:
 | WEBFS-derived HTTP server | [GPL-2.0-only](COPYING) | `src/webfsd.c`, `src/request.c`, `src/response.c`, `src/ls.c`, `src/mime.c`, `src/httpd.h` |
 | V4L2 webcam capture | Public Domain | `src/webcam.c` |
 
-The **compiled binary** as a whole is covered by GPL-2.0 (the most restrictive component).
+The **compiled binary** as a whole is covered by GPL-2.0-only (the most restrictive component).
 New contributions default to Apache 2.0 per the root [`LICENSE`](LICENSE) file.
 Each source file declares its own license via an SPDX header; see [`REUSE.toml`](REUSE.toml) for project-wide declarations.
 
