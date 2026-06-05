@@ -402,9 +402,10 @@ function startPrintSimulation(io: SocketIOServer) {
     if (isUpdateTick) {
       // Simulate print/update: set real values (Sport mode during print,
       // fan oscillates between 50-100% as the firmware adjusts cooling)
+      // Firmware uses 1-based mode: 1=Stable, 2=Standard, 3=Sport
       job.fan_speed = 50 + Math.floor(Math.random() * 6) * 10 // 50,60,70,80,90,100
       job.z_offset = -1.57
-      job.print_speed_mode = 2 // Sport during active print
+      job.print_speed_mode = 3 // Sport (1-based) during active print
     } else {
       // Simulate print/start: kobra-unleashed resets to sentinel defaults
       job.fan_speed = -1
@@ -494,12 +495,13 @@ function startPreheating(io: SocketIOServer) {
     // Simulate print/update arriving during preheating: one step carries real
     // settings (Standard mode, fan at 100%), all others reset to sentinel
     // defaults (from kobra-unleashed recreating PrintJob on print/start)
+    // Firmware uses 1-based mode: 1=Stable, 2=Standard, 3=Sport
     const job = printer.print_job
     if (job) {
       if (currentStep === updateStep) {
         job.fan_speed = 100
         job.z_offset = -1.57
-        job.print_speed_mode = 1 // Standard during preheating
+        job.print_speed_mode = 2 // Standard (1-based) during preheating
       } else {
         job.fan_speed = -1
         job.z_offset = 0.0
