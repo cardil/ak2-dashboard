@@ -237,7 +237,7 @@ void init_quote(void) {
 
 char *
 quote(unsigned char *path, int maxlength) {
-    static unsigned char buf[2048]; /* FIXME: threads break this... */
+    static unsigned char buf[2048];
     int i, j, n = strlen(path);
 
     if (n > maxlength)

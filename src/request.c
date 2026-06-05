@@ -1233,8 +1233,7 @@ void parse_request(struct REQUEST *req) {
             int is_api_route = (strncmp(req->path, "/api/", 5) == 0);
             int is_static_asset = (strncmp(req->path, "/_app/", 6) == 0) ||
                                   (strncmp(req->path, "/webcam/", 8) == 0) ||
-                                  (strncmp(req->path, "/files/", 7) == 0) ||
-                                  (strncmp(req->path, "/deprecated/", 12) == 0);
+                                  (strncmp(req->path, "/files/", 7) == 0);
 
             if (!is_api_route && !is_static_asset) {
                 /* Try to serve root index.html for SPA routing */
@@ -1264,8 +1263,7 @@ void parse_request(struct REQUEST *req) {
                 int is_api_route = (strncmp(req->path, "/api/", 5) == 0);
                 int is_static_asset = (strncmp(req->path, "/_app/", 6) == 0) ||
                                       (strncmp(req->path, "/webcam/", 8) == 0) ||
-                                      (strncmp(req->path, "/files/", 7) == 0) ||
-                                      (strncmp(req->path, "/deprecated/", 12) == 0);
+                                      (strncmp(req->path, "/files/", 7) == 0);
 
                 if (!is_api_route && !is_static_asset) {
                     /* Try to serve root index.html for SPA routing */
@@ -1341,7 +1339,6 @@ void parse_request(struct REQUEST *req) {
             int is_static_asset = (strncmp(req->path, "/_app/", 6) == 0) ||
                                   (strncmp(req->path, "/webcam/", 8) == 0) ||
                                   (strncmp(req->path, "/files/", 7) == 0) ||
-                                  (strncmp(req->path, "/deprecated/", 12) == 0) ||
                                   (strchr(req->path, '.') != NULL); /* Has file extension */
 
             if (!is_api_route && !is_static_asset) {
