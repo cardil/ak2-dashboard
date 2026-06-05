@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bed mesh 3D visualization using ECharts GL (#2)
 - Print history tracking (#2)
 - Configuration profile management (save/load leveling slots) (#2)
-- Per-file license separation: Apache 2.0 for frontend, GPL-2.0 for C backend (#19)
+- Per-file license separation: WEBFS-derived C files use GPL-2.0-only; all other files (frontend, API, scripts) use Apache-2.0; webcam capture is public domain (#19)
 - SSH and reboot API endpoints
 - Config file (`webserver.json`) support
 - Printer model auto-detection (Plus and Max variants)
