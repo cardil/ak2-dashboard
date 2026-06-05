@@ -148,6 +148,23 @@ function createPrinterStore() {
               updatedPrinter.files = existingPrinter.files
             }
 
+            // Retain last-known-good print job settings when the backend sends
+            // sentinel/default values. This is a frontend workaround for a
+            // kobra-unleashed bug (cardil/kobra-unleashed#4) where every
+            // print/start MQTT message recreates PrintJob with defaults, wiping
+            // real values that arrived via print/update messages (~10x less
+            // frequent). We keep the previous values when:
+            // 1. Both old and new print_job exist for the same task
+            // 2. The incoming value is the sentinel default (-1 or 0.0)
+            const prevJob = existingPrinter?.print_job
+            const newJob = updatedPrinter.print_job
+            if (newJob && prevJob && newJob.taskid === prevJob.taskid) {
+              if (newJob.fan_speed < 0) newJob.fan_speed = prevJob.fan_speed
+              if (newJob.z_offset === 0.0) newJob.z_offset = prevJob.z_offset
+              if (newJob.print_speed_mode < 0)
+                newJob.print_speed_mode = prevJob.print_speed_mode
+            }
+
             return {
               ...currentPrinters,
               [id]: updatedPrinter,
