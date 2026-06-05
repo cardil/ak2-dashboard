@@ -182,9 +182,15 @@ function createPrinterStore() {
               newJob &&
               (!prevJob || newJob.taskid !== prevJob?.taskid)
             ) {
-              // New task started — drop only old task tracking, then seed
-              // new task if the first update already has a real non-zero value
-              if (prevJob) tasksWithRealZOffset.delete(prevJob.taskid)
+              // New task started — drop tracking for old and new task ids
+              // to avoid stale sentinel state from a previous print with the
+              // same taskid (e.g. after idle/null transition). Then seed if
+              // first update already carries a real non-zero value.
+              if (prevJob) {
+                tasksWithRealZOffset.delete(prevJob.taskid)
+              } else {
+                tasksWithRealZOffset.delete(newJob.taskid)
+              }
               if (newJob.z_offset !== 0.0)
                 tasksWithRealZOffset.add(newJob.taskid)
             }
