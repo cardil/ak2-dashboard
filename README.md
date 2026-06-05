@@ -168,7 +168,7 @@ This project uses a **split license** model:
 
 | Component | License | Files |
 |-----------|---------|-------|
-| AK2 Dashboard (frontend, API, scripts, tests) | [Apache 2.0](LICENSE) | `frontend/`, `src/api*`, `scripts/`, `e2e/` |
+| AK2 Dashboard (frontend, API, scripts, tests) | [Apache 2.0](LICENSE) | All files not listed below |
 | WEBFS-derived HTTP server | [GPL-2.0-only](COPYING) | `src/webfsd.c`, `src/request.c`, `src/response.c`, `src/ls.c`, `src/mime.c`, `src/httpd.h` |
 | V4L2 webcam capture | Public Domain | `src/webcam.c` |
 
