@@ -99,7 +99,8 @@
   $: speedMode = (() => {
     const mode = printer?.print_job?.print_speed_mode
     if (mode === undefined || mode === null || mode < 0) return "N/A"
-    return ["Silent", "Normal", "Sport"][mode] ?? "N/A"
+    // Firmware uses 1-based mode: 1=Stable, 2=Standard, 3=Sport
+    return ["Stable", "Standard", "Sport"][mode - 1] ?? "N/A"
   })()
   $: formattedZOffset = (() => {
     const offset = Number(printer?.print_job?.z_offset ?? 0)

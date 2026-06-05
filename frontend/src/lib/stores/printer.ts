@@ -81,6 +81,10 @@ import { browser } from "$app/environment"
 function createPrinterStore() {
   const { subscribe, set, update } = writable<{ [id: string]: Printer }>({})
   let socket: any
+  // Tracks task IDs that have received at least one non-zero z_offset.
+  // Once seen, any subsequent 0.0 for the same task is treated as the
+  // kobra-unleashed PrintJob sentinel (cardil/kobra-unleashed#4), not a real value.
+  const tasksWithRealZOffset = new Set<string>()
 
   webserverStore.subscribe((config) => {
     // Disconnect from the old socket if it exists
@@ -146,6 +150,49 @@ function createPrinterStore() {
             // managed separately by the `refreshFiles` function.
             if (existingPrinter) {
               updatedPrinter.files = existingPrinter.files
+            }
+
+            // Retain last-known-good print job settings when the backend sends
+            // sentinel/default values. This is a frontend workaround for a
+            // kobra-unleashed bug (cardil/kobra-unleashed#4) where every
+            // print/start MQTT message recreates PrintJob with defaults, wiping
+            // real values that arrived via print/update messages (~10x less
+            // frequent). We keep the previous values when:
+            // 1. Both old and new print_job exist for the same task
+            // 2. The incoming value is the sentinel default (-1)
+            //
+            // For z_offset: 0.0 is technically valid but is also the kobra-unleashed
+            // PrintJob default. We use a heuristic: once a non-zero z_offset has been
+            // observed for a task, treat all subsequent 0.0 values as the sentinel.
+            // Before seeing any non-zero value, 0.0 is displayed as-is.
+            const prevJob = existingPrinter?.print_job
+            const newJob = updatedPrinter.print_job
+            if (newJob && prevJob && newJob.taskid === prevJob.taskid) {
+              if (newJob.fan_speed < 0) newJob.fan_speed = prevJob.fan_speed
+              if (newJob.z_offset !== 0.0) {
+                // Record that this task has real z_offset data
+                tasksWithRealZOffset.add(newJob.taskid)
+              } else if (tasksWithRealZOffset.has(newJob.taskid)) {
+                // 0.0 after a real value → sentinel, retain last known good
+                newJob.z_offset = prevJob.z_offset
+              }
+              if (newJob.print_speed_mode < 0)
+                newJob.print_speed_mode = prevJob.print_speed_mode
+            } else if (
+              newJob &&
+              (!prevJob || newJob.taskid !== prevJob?.taskid)
+            ) {
+              // New task started — drop tracking for old and new task ids
+              // to avoid stale sentinel state from a previous print with the
+              // same taskid (e.g. after idle/null transition). Then seed if
+              // first update already carries a real non-zero value.
+              if (prevJob) {
+                tasksWithRealZOffset.delete(prevJob.taskid)
+              } else {
+                tasksWithRealZOffset.delete(newJob.taskid)
+              }
+              if (newJob.z_offset !== 0.0)
+                tasksWithRealZOffset.add(newJob.taskid)
             }
 
             return {
