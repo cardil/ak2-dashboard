@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 /**
  * Check if content is binary by looking for NULL bytes and invalid UTF-8
  */

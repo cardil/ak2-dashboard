@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil) -->
 <script lang="ts">
   import { onDestroy } from "svelte"
   import CameraOffIcon from "$lib/components/icons/CameraOffIcon.svelte"

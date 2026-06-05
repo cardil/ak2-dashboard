@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 import { createServer } from "vite"
 import fetch from "node-fetch"
 import { describe, it, expect, beforeAll, afterAll } from "vitest"

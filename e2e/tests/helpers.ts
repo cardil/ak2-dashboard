@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { APIRequestContext } from '@playwright/test';

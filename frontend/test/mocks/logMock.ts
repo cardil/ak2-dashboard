@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 // Mock log functionality for testing
 // Generates and manages a mock log file that can simulate large log files
 

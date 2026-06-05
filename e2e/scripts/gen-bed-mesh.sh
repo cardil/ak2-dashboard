@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 # Simulates bed mesh leveling by generating mesh points and z-offset in printer.cfg
 # This mimics what the vendor app does when running bed leveling
 

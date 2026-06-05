@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 import * as fs from "fs"
 import type { Server as SocketIOServer } from "socket.io"
 import type { Printer } from "./kobraData"

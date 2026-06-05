@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 # E2E Testbed entrypoint script
 # Starts services and handles signals properly for graceful shutdown
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 /**
  * Parses an uptime string in "HH:MM:SS" format into a total number of seconds.
  * @param uptimeString The uptime string to parse.

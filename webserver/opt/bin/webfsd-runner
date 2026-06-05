@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 # Webfsd startup wrapper script
 # Provides unified startup for webfsd with configuration file support
 # Used by both rc.local and deployment scripts

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 // frontend/src/lib/dev/mockProxy.ts
 import { browser } from "$app/environment"
 import { localMockCommands } from "./mockLocalCommands"

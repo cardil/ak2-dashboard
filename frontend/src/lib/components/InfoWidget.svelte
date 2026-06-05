@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil) -->
 <script lang="ts">
   export let label: string
   export let title: string = ""

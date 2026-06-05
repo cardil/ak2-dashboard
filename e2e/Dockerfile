@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 # E2E Testbed Dockerfile - Simulates Tina Linux printer environment
 # Tina Linux = OpenWRT + glibc 2.23 (Allwinner's custom build)
 # We create a hybrid by sideloading glibc from Ubuntu 16.04 into OpenWRT rootfs

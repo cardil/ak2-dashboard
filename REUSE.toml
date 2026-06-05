@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
+#
+# REUSE specification: https://reuse.software/spec/
+# This file declares copyright and license for files that cannot have
+# comment headers (binaries, images, lock files, etc.).
+# Per-file SPDX headers in source files take precedence over entries here.
+
+version = 1
+
+# ── Default: all project files are Apache-2.0 ─────────────────────────────────
+[[annotations]]
+path = ["**"]
+SPDX-License-Identifier = "Apache-2.0"
+SPDX-FileCopyrightText = "2024-2026 Chris Suszynski (@cardil)"
+
+# ── WEBFS-derived backend files: GPL-2.0-only ─────────────────────────────────
+# These files originate from WEBFS by Gerd Hoffmann and were modified by
+# AGG2017 and Chris Suszynski. GPL-2.0 is mandatory; it cannot be changed.
+[[annotations]]
+path = [
+  "src/webfsd.c",
+  "src/request.c",
+  "src/response.c",
+  "src/ls.c",
+  "src/mime.c",
+  "src/httpd.h",
+]
+SPDX-License-Identifier = "GPL-2.0-only"
+SPDX-FileCopyrightText = [
+  "1999-2003 Gerd Hoffmann <kraxel@bytesex.org>",
+  "2017 AGG2017",
+  "2024-2026 Chris Suszynski (@cardil)",
+]
+
+# ── V4L2 webcam capture: public domain ────────────────────────────────────────
+# Based on V4L2 video capture example (public domain reference implementation).
+[[annotations]]
+path = ["src/webcam.c"]
+SPDX-License-Identifier = "LicenseRef-PublicDomain"
+SPDX-FileCopyrightText = [
+  "2017 AGG2017",
+  "2024-2026 Chris Suszynski (@cardil)",
+]

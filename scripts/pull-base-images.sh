@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
 # Pull base images from a Dockerfile only if not already cached locally.
 # Usage: pull-base-images.sh <default-platform> <dockerfile>
 # This avoids podman's forced "pull=newer" behavior for cross-platform builds,

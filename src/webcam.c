@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: LicenseRef-PublicDomain
+// SPDX-FileCopyrightText: 2017 AGG2017
+// SPDX-FileCopyrightText: 2024-2026 Chris Suszynski (@cardil)
+//
 /*
 *  V4L2 video capture example
 *	http://linuxtv.org/downloads/v4l-dvb-apis/capture-example.html
