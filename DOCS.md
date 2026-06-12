@@ -422,7 +422,7 @@ A: Absolutely! The project is open source and welcomes contributions. See the Gi
 
 **Q: Does this work with all Kobra 2 models?**
 
-A: Yes, it supports K2, K2 Pro, K2 Plus, and K2 Max.
+A: No. This project is designed for **KobraOS**-based printers — specifically the **K2 Pro, K2 Plus, and K2 Max**. It does **not** support the K2 base model or K2 Neo. Printers with the Spe_B board can technically run it, but [Rinkhals](https://jbatonnet.github.io/Rinkhals) is likely a better fit for those.
 
 **Q: What about Kobra 3?**
 
